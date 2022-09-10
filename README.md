@@ -3,4 +3,5 @@
 
 ## Code Overview ## 
 DiD_matching_func.R contains the main function to run Guideline 1 and 2
+
 simulation_example.R contains an example from a simulation study demonstrating how to use DiD_matching_func.R
