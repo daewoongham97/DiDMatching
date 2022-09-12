@@ -87,11 +87,6 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
   condition = r_theta >= 1 - abs(1 - ratio)
 
   # estimated reduction in bias
-
-  new_X_trt$savg_math0 = trt$savg_math0
-
-
-
   predic_ctrl = predict(reg_x_pre[[t]], ctrl)
   r1_ctrl = ctrl[, Y_pre[t]] - predic_ctrl
 
