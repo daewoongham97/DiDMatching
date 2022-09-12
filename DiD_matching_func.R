@@ -24,6 +24,18 @@
 #' estimated pre-slope, etc.}
 DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
 
+  # simple checks
+  col_names = colnames(data)
+  if (!all(Y_pre %in% col_names)) stop("Y_pre is not in column of data")
+  if (!all(Y_post %in% col_names)) stop("Y_post is not in column of data")
+  if (!all(X %in% col_names)) stop("X is not in column of data")
+  if (!all(treatment %in% col_names)) stop("treatment is not in column of data")
+
+  if (!(is.numeric(data[, treatment]))) stop("Treatment not numeric")
+  if (!all(unique(data[, treatment]) %in% c(0, 1))) stop("Treatment is not binary")
+  if (!all( (sapply(data.frame(data[, X]), class) %in% "numeric") ) ) stop("X is not numeric")
+
+
   ctrl = data[data[,treatment] == 0, ]
   trt = data[data[, treatment] == 1, ]
 
@@ -113,4 +125,5 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
   out = list(result_df, estimate_df)
   return(out)
 }
+
 
