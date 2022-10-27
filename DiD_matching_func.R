@@ -108,21 +108,19 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
 
   est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
 
-  result_df = data.frame(delta_tau_x, condition,est_tau_xy)
-  colnames(result_df) = c("Matching X: Estimated Reduction of Bias", "Match on Y_pre Check",
-                          "Matching Y: Estimated Reduction/Increase of Bias")
+  result_df = tribble( ~ what, ~ match, ~ `reduction in bias`,
+                       "X", TRUE, delta_tau_x,
+                       "X & Y_pre", condition, est_tau_xy)
 
-  estimate_df = list()
-  estimate_df[[1]] = est_delta_x
-  estimate_df[[2]] = r_theta
-  estimate_df[[3]] = est_beta_theta_pre
-  estimate_df[[4]] = est_beta_theta_post
-  estimate_df[[5]] = est_delta_theta
 
-  names(estimate_df) = c("Estimated Imbalance of X", "Estimated Reliability",
-                         "Estimated pre-slope", "Estimated post-slope", "Estimated Imbalance of theta")
+  estimate_df = tribble( ~ quantity, ~ estimate,
+                         "Imbalance of X" , est_delta_x,
+                         "Reliability" , r_theta,
+                         "pre-slope" , est_beta_theta_pre,
+                         "post-slope" , est_beta_theta_post,
+                         "Imbalance of theta" , est_delta_theta )
 
-  out = list(result_df, estimate_df)
+  out = list(result = result_df, estimate = estimate_df)
   return(out)
 }
 
