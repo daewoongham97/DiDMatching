@@ -63,7 +63,7 @@ res_XY
 
 
 
-# doing the staggered adoption call: basically the same results!
+#### doing the staggered adoption call: basically the same results! ####
 res_stg = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                         Y_post = tx_year,
                                         treatment = "treat",
@@ -72,6 +72,9 @@ res_stg = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                         data = dat,
                                         aggregate_only = TRUE )
 res_stg
+
+
+
 
 
 

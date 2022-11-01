@@ -37,6 +37,22 @@ final_df = X_df
 head( final_df )
 
 
+
+# How often are schools treated?
+
+head( final_df )
+
+filter( final_df, school_id == "1004" ) %>%
+    dplyr::select( year, treat, starts_with( "savg_mat" ) ) %>%
+    relocate( savg_math, .after = year )
+
+length( unique( final_df$school_id ) )
+n_txs <- final_df %>% group_by( school_id ) %>%
+    summarise( n_tx = sum( treat ) )
+table( n_txs$n_tx )
+
+
+
 #### obtaining post-treatment outcome  ####
 achievement_df = read_dta( here::here( "../data/school_ach_9717_mask.dta") )
 
