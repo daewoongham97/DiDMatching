@@ -38,13 +38,13 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
     if (!all(X %in% col_names)) stop("X is not in column of data")
     if (!all(treatment %in% col_names)) stop("treatment is not in column of data")
 
-    if (!(is.numeric(data[, treatment]))) stop("Treatment not numeric")
-    if (!all(unique(data[, treatment]) %in% c(0, 1))) stop("Treatment is not binary")
-    if (!all( (sapply(data.frame(data[, X]), class) %in% "numeric") ) ) stop("X is not numeric")
+    if (!(is.numeric(data[[treatment]]))) stop("Treatment not numeric")
+    if (!all(unique(data[[treatment]]) %in% c(0, 1))) stop("Treatment is not binary")
+    if (!all( (sapply( data[X], class) %in% "numeric") ) ) stop("X is not numeric")
 
 
-    ctrl = data[data[,treatment] == 0, ]
-    trt = data[data[, treatment] == 1, ]
+    ctrl = data[data[[treatment]] == 0, ]
+    trt = data[data[[treatment]] == 1, ]
 
 
     ## Guideline 1) Estimating Delta_X
@@ -107,15 +107,15 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
 
     # estimated reduction in bias
     predic_ctrl = predict(reg_x_pre[[t]], ctrl)
-    r1_ctrl = ctrl[, Y_pre[t]] - predic_ctrl
+    r1_ctrl = ctrl[[ Y_pre[t] ]] - predic_ctrl
 
     predic_trt = predict(reg_x_pre[[t]], trt)
-    r1_trt = trt[, Y_pre[t]] - predic_trt
+    r1_trt = trt[[ Y_pre[t] ]] - predic_trt
     est_delta_theta = (mean(r1_trt) - mean(r1_ctrl))/est_beta_theta_pre; est_delta_theta
 
     est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
 
-    result_df = tribble( ~ what, ~ match, ~ `reduction in bias`,
+    result_df = tribble( ~ what, ~ match, ~ bias_reduction,
                          "X", TRUE, delta_tau_x,
                          "X & Y_pre", condition, est_tau_xy)
 
@@ -134,5 +134,79 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
     out = list(result = result_df, estimate = estimate_df)
     return(out)
 }
+
+
+
+
+#' Calculate matching guidelines for staggered adoption data
+#'
+#' This assumes data has been "stacked", meaning we have 1 row (with
+#' lagged outcomes) for each unit by time combination.
+#'
+#' @inheritParams DiD_matching_guideline
+#' @param group Character name of grouping variable for different starting
+#'   points of treatment onset.
+#'
+DiD_matching_guideline_staggered = function(Y_pre, Y_post, treatment, group, X, data,
+                                            aggregate_only = FALSE ) {
+
+    gdat <- dat %>% group_by_at( group ) %>%
+        nest()
+
+    gdat$n = map_dbl( gdat$data, nrow )
+    gdat$n_tx = map_dbl( gdat$data, function( d ) {
+        sum( d[[treatment]] == 1 )
+        })
+
+    res <- map( gdat$data, DiD_matching_guideline,
+                Y_pre = Y_pre, Y_post = Y_post,
+                treatment = treatment, X = X )
+
+    res = transpose( res )
+
+    gdat$result = res$result
+    gdat$estimate = res$estimate
+
+    gdat$data = NULL
+
+
+    gdat <- gdat %>% unnest( cols = result ) %>%
+        pivot_wider( names_from = "what", values_from = c( match, bias_reduction ) ) %>%
+        rename( bias_X = bias_reduction_X,
+                match_XY = `match_X & Y_pre`,
+                bias_XY = `bias_reduction_X & Y_pre` )
+
+    agg <- gdat %>% ungroup() %>%
+        summarise( match_X = weighted.mean( match_X, w = n_tx ),
+                   bias_X = weighted.mean( bias_X, w = n_tx ),
+                   match_XY = weighted.mean( match_XY, w = n_tx ),
+                   bias_XY = weighted.mean( bias_XY, w = n_tx ),
+                   n = sum( n ),
+                   n_tx = sum( n_tx ) )
+
+
+    agg_est = gdat %>%
+        unnest( cols = estimate ) %>%
+        group_by( quantity ) %>%
+        summarise( estimate = weighted.mean( estimate, w = n_tx ) )
+
+
+
+
+    if ( aggregate_only ) {
+        list( result = agg, estimate = agg_est )
+    } else {
+        agg$year = "ALL"
+        agg$estimate = list( agg_est )
+        gdat$year = as.character(gdat$year)
+        gdat = bind_rows( gdat, agg )
+
+        gdat
+
+    }
+
+}
+
+
 
 
