@@ -1,4 +1,4 @@
-calc_matchXY_diagnostics <- function( data,
+calc_matchXY_diagnostics_up <- function( data,
                                       models = NULL,
                                       years,
                                       treat = "treat",

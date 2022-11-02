@@ -30,6 +30,18 @@ pre_years
 tx_year = "savg_math"
 
 
+#### Drop all 0s in the outcomes ####
+
+# head(dat)
+# maths = which( str_detect( names(dat), "savg_math",  ) )
+# for ( m in maths ) {
+#     zeros = dat[[m]] == 0
+#     dat[zeros,m] = NA
+# }
+# nrow(dat)
+# dat = na.omit( dat )
+# nrow(dat)
+
 
 #### Diagnostic for Matching on X or X and YPre ####
 
@@ -64,6 +76,7 @@ res_XY
 
 
 #### doing the staggered adoption call: basically the same results! ####
+
 res_stg = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                         Y_post = tx_year,
                                         treatment = "treat",
@@ -73,6 +86,16 @@ res_stg = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                         aggregate_only = TRUE )
 res_stg
 
+
+# If we want to see all the cohorts separately
+res_stg_full = DiD_matching_guideline_staggered( Y_pre = pre_years,
+                                            Y_post = tx_year,
+                                            treatment = "treat",
+                                            group = "year",
+                                            X = c_vars,
+                                            data = dat,
+                                            aggregate_only = FALSE )
+res_stg_full
 
 
 
@@ -92,6 +115,7 @@ delta_x = calc_X_imbalance(dat, treat="treat", control_vars = c_vars )
 delta_x
 
 
+
 # Calculate numbers on Table 1 (left column)
 results = calc_matchX_diagnostics( models=models, delta_x=delta_x )
 
@@ -101,10 +125,15 @@ round( results$Delta_x, digits = 2 )
 results$delta_tau_x
 
 
+# compare to our function call...
+res
+
+
+
 
 #### Appendix tables of model results ####
 
-# this code is used to genereated Table 2 in Appendix
+# this code is used to generated Table 2 in Appendix
 library(stargazer)
 if ( FALSE ) {
     # Latex version

@@ -95,7 +95,7 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
     emp_cov = cov(all_residuals[[t]] , residuals(reg_x_post) )
     v_t = var(all_residuals[[t]])
 
-    est_beta_theta_pre = sqrt(v_t -est_sig_pre)
+    est_beta_theta_pre = sqrt(v_t - est_sig_pre)
     est_beta_theta_post = emp_cov/est_beta_theta_pre
     est_Delta_theta = est_beta_theta_post - est_beta_theta_pre
     ratio = est_beta_theta_pre/est_beta_theta_post; ratio
@@ -111,23 +111,23 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
 
     predic_trt = predict(reg_x_pre[[t]], trt)
     r1_trt = trt[[ Y_pre[t] ]] - predic_trt
-    est_delta_theta = (mean(r1_trt) - mean(r1_ctrl))/est_beta_theta_pre; est_delta_theta
+    est_delta_theta = (mean(r1_trt) - mean(r1_ctrl))/est_beta_theta_pre
 
     est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
 
-    result_df = tribble( ~ what, ~ match, ~ bias_reduction,
-                         "X", TRUE, delta_tau_x,
-                         "X & Y_pre", condition, est_tau_xy)
+    result_df = tribble( ~ what,        ~ match, ~ bias_reduction,
+                         "X",              TRUE,      delta_tau_x,
+                         "X & Y_pre", condition,       est_tau_xy)
 
 
     est_delta_x = tibble( quantity = paste0( "delta_x: ", names(est_delta_x) ),
                           estimate = est_delta_x)
 
-
     estimate_df = tribble( ~ quantity, ~ estimate,
                            "Reliability (rho)" , r_theta,
                            "pre-slope (beta_T-1)" , est_beta_theta_pre,
                            "post-slope (beta_T)" , est_beta_theta_post,
+                           "s", est_beta_theta_pre / est_beta_theta_post,
                            "delta_theta (~)" , est_delta_theta )
     estimate_df = bind_rows( estimate_df, est_delta_x )
 
