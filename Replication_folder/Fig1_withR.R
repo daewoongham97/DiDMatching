@@ -43,8 +43,6 @@ fig_1_R
 library(readr)
 
 # Results were generated from original source files of Bartanen, Grissom and Rogers (2016)
-nomatch = read.csv("data/nomatch.csv")
-
 matched = read.csv("data/match.csv")
 control_match = matched[c(2, 4, 6, 8, 10, 12, 14), 2]
 control_match = parse_number(control_match)
