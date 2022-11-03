@@ -46,6 +46,8 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
     ctrl = data[data[[treatment]] == 0, ]
     trt = data[data[[treatment]] == 1, ]
 
+    n = nrow(data)
+    n_tx = nrow(trt)
 
     ## Guideline 1) Estimating Delta_X
     if (length(X) > 1) {
@@ -73,14 +75,21 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
         x_slope_avg[i] = mean(sapply(all_x_slopes, "[[", i))
     }
 
-    delta_tau_x = abs(sum(est_delta_x*(coef(reg_x_post)[-1] - x_slope_avg)))
+    x_slope_post = coef(reg_x_post)[-1]
+
+    slopes = tibble( quantity = names( x_slope_post ),
+                     beta_pre = x_slope_avg,
+                     beta_post = x_slope_post,
+                     Delta = x_slope_post - x_slope_avg,
+                     delta = est_delta_x )
+
+    delta_tau_x = abs(sum(est_delta_x*(x_slope_post - x_slope_avg)))
 
 
     ## Guideline 2) Step 1) Check condition
     t = length(Y_pre)
     # getting the new response based on the average of all the pre-treatment (residualized) outcomes
     all_residuals = lapply(reg_x_pre, residuals)
-
 
 
     Y_res = all_residuals[[1]]
@@ -115,23 +124,30 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
 
     est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
 
-    result_df = tribble( ~ what,        ~ match, ~ bias_reduction,
-                         "X",              TRUE,      delta_tau_x,
-                         "X & Y_pre", condition,       est_tau_xy)
+    result_df = tribble( ~ what,        ~ match, ~ bias_reduction, ~ n, ~ n_tx,
+                         "X",              TRUE,      delta_tau_x, n, n_tx,
+                         "X & Y_pre", condition,       est_tau_xy, n, n_tx )
 
 
-    est_delta_x = tibble( quantity = paste0( "delta_x: ", names(est_delta_x) ),
-                          estimate = est_delta_x)
+    #est_delta_x = tibble( quantity = paste0( "delta_x: ", names(est_delta_x) ),
+    #                      statistic = est_delta_x)
 
-    estimate_df = tribble( ~ quantity, ~ estimate,
+    deltas = tribble( ~ quantity,   ~beta_pre, ~beta_post, ~Delta, ~delta,
+                      "theta (~)",  est_beta_theta_pre, est_beta_theta_post, est_Delta_theta, est_delta_theta )
+
+    deltas = bind_rows( slopes, deltas )
+
+    estimate_df = tribble( ~ quantity, ~ statistic,
                            "Reliability (rho)" , r_theta,
-                           "pre-slope (beta_T-1)" , est_beta_theta_pre,
-                           "post-slope (beta_T)" , est_beta_theta_post,
+                           #"pre-slope (beta_T-1)" , est_beta_theta_pre,
+                           #"post-slope (beta_T)" , est_beta_theta_post,
                            "s", est_beta_theta_pre / est_beta_theta_post,
-                           "delta_theta (~)" , est_delta_theta )
-    estimate_df = bind_rows( estimate_df, est_delta_x )
+                           #"delta_theta (~)" , est_delta_theta,
+                           #"Delta_theta (~)", est_beta_theta_post - est_beta_theta_pre )
+    )
+    #estimate_df = bind_rows( estimate_df, est_delta_x )
 
-    out = list(result = result_df, estimate = estimate_df)
+    out = list(result = result_df, statistic = estimate_df, delta = deltas )
     return(out)
 }
 
@@ -153,11 +169,6 @@ DiD_matching_guideline_staggered = function(Y_pre, Y_post, treatment, group, X, 
     gdat <- dat %>% group_by_at( group ) %>%
         nest()
 
-    gdat$n = map_dbl( gdat$data, nrow )
-    gdat$n_tx = map_dbl( gdat$data, function( d ) {
-        sum( d[[treatment]] == 1 )
-        })
-
     res <- map( gdat$data, DiD_matching_guideline,
                 Y_pre = Y_pre, Y_post = Y_post,
                 treatment = treatment, X = X )
@@ -165,44 +176,48 @@ DiD_matching_guideline_staggered = function(Y_pre, Y_post, treatment, group, X, 
     res = transpose( res )
 
     gdat$result = res$result
-    gdat$estimate = res$estimate
+    gdat$statistic = res$statistic
+    gdat$delta = res$delta
 
     gdat$data = NULL
 
 
-    gdat <- gdat %>% unnest( cols = result ) %>%
-        pivot_wider( names_from = "what", values_from = c( match, bias_reduction ) ) %>%
-        rename( bias_X = bias_reduction_X,
-                match_XY = `match_X & Y_pre`,
-                bias_XY = `bias_reduction_X & Y_pre` )
+    gdat <- gdat %>% unnest( cols = result )
 
-    agg <- gdat %>% ungroup() %>%
-        summarise( match_X = weighted.mean( match_X, w = n_tx ),
-                   bias_X = weighted.mean( bias_X, w = n_tx ),
-                   match_XY = weighted.mean( match_XY, w = n_tx ),
-                   bias_XY = weighted.mean( bias_XY, w = n_tx ),
+    agg <- gdat %>%
+        group_by( what ) %>%
+        summarise( match = weighted.mean( match, w = n_tx ),
+                   bias_reduction = weighted.mean( bias_reduction, w = n_tx ),
                    n = sum( n ),
                    n_tx = sum( n_tx ) )
 
 
     agg_est = gdat %>%
-        unnest( cols = estimate ) %>%
+        filter( what == "X" ) %>%
+        unnest( cols = statistic ) %>%
         group_by( quantity ) %>%
-        summarise( estimate = weighted.mean( estimate, w = n_tx ) )
+        summarise( statistic = weighted.mean( statistic, w = n_tx ) )
 
-
+    agg_delta = gdat %>%
+        filter( what == "X" ) %>%
+        unnest( cols = delta ) %>%
+        group_by(quantity) %>%
+        summarise( beta_pre = weighted.mean( beta_pre, w = n_tx ),
+                   beta_post = weighted.mean( beta_post, w = n_tx ),
+                   Delta = weighted.mean( Delta, w = n_tx ),
+                   delta = weighted.mean( delta, w = n_tx ) )
 
 
     if ( aggregate_only ) {
-        list( result = agg, estimate = agg_est )
+        list( result = agg, statistic = agg_est, delta = agg_delta )
     } else {
         agg$year = "ALL"
-        agg$estimate = list( agg_est )
+        agg$statistic = list( agg_est )
+        agg$delta = list( agg_delta )
         gdat$year = as.character(gdat$year)
         gdat = bind_rows( gdat, agg )
 
         gdat
-
     }
 
 }

@@ -54,9 +54,12 @@ truth = calculate_truth( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_
                          p = p, num_pre = num_pre, rho = rho )
 
 res$result$true = truth$biases
-res$estimate$true = truth$params
+res$statistic$true = truth$params
+res$delta$true = truth$delta$delta
 
-res$result$per_off = res$result$`reduction in bias` / res$result$true
-res$estimate$per_off = res$estimate$estimate / res$estimate$true
+
+res$result$per_off = res$result$bias_reduction / res$result$true
+res$statistic$per_off = res$statistic$statistic / res$statistic$true
+res$delta$per_off = res$delta$delta / res$delta$true
 res
 

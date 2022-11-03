@@ -24,14 +24,18 @@ one_run <- function( N, num_pre, ... ) {
     truth <- calculate_truth( num_pre = num_pre, ... )
 
     res$result$true = truth$biases
-    res$estimate$true = truth$params
+    res$statistic$true = truth$params
+    res$delta$true = truth$delta$delta
 
-    res
-
-    names( res$result ) <- c( "quantity", "match", "estimate", "true" )
+    res$result$n = NULL
+    res$result$n_tx = NULL
+    names( res$result ) <- c( "quantity", "match", "statistic", "true" )
     res$result$quantity <- c( "reduce_X", "reduce_XY" )
 
-    bind_rows( res$result, res$estimate )
+    res$delta = dplyr::select( res$delta, quantity, delta, true ) %>%
+        rename( statistic = delta )
+
+    bind_rows( res$result, res$statistic, res$delta )
 }
 
 
@@ -54,9 +58,10 @@ rps <- bind_rows( rps, .id="runID" )
 rps
 
 
-rps %>% filter( quantity == "reduce_XY" ) %>%
+rps %>% group_by( quantity ) %>%
     summarise( match = mean(match),
-               Eest = mean(estimate),
+               Eest = mean(statistic),
                true = mean(true),
-               sdEst = sd(estimate ) )
+               sdEst = sd(statistic ) )
+
 

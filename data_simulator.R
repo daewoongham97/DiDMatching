@@ -113,33 +113,32 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
     r = (num_pre*beta_theta_0^2*tilde_sigma_theta)/ ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma_pre^2)
     r
 
-
     # True reduction in bias from matching additionally on Y_pre
     bias_Y = beta_theta_1*tilde_delta_theta*(1 - r)
     abs(bias_Y - bias_X)
 
 
     # True imbalance of X
-    mu_x_1 - mu_x_0
+    delta_x = mu_x_1 - mu_x_0
 
     # True expected pre/post slope
-    beta_theta_0*tilde_sigma_theta
-    beta_theta_1*tilde_sigma_theta
-
-
+    beta_theta_pre = beta_theta_0*tilde_sigma_theta
+    beta_theta_post = beta_theta_1*tilde_sigma_theta
 
 
     ## Add true values to compare to original estimates to ease comparison
 
     biases = c( abs(bias_X - bias_naive),
-                         abs(bias_Y - bias_X) )
+                abs(bias_Y - bias_X) )
 
-    params = c( r = r,
-                beta_pre =       beta_theta_0*tilde_sigma_theta,
-                beta_post = beta_theta_1*tilde_sigma_theta,
-                tilde_delta_theta = tilde_delta_theta,
-                delta_x = mu_x_1 - mu_x_0 )
-    list( biases = biases, params = params )
+    delta = tribble( ~ quantity, ~beta_pre, ~beta_post, ~Delta, ~delta,
+                     "X",  NA, NA, NA, delta_x,
+                     "theta (~)", beta_theta_pre, beta_theta_post, beta_theta_post - beta_theta_pre, tilde_delta_theta  )
+
+    param = c( r = r,
+               s = beta_theta_post / beta_theta_pre )
+
+    list( biases = biases, params = param, delta = delta )
 
 }
 

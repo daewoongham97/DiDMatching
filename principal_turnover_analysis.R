@@ -9,38 +9,36 @@ library( here )
 library( haven )
 
 
-source( "extra_functions.R" )
-
 
 #### Load data #####
 
-dat = readRDS( here::here("../data/cleaned_data.rda" ) )
+dat = read_csv( here::here("../data/cleaned_data.csv" ) )
 
 c_vars = c( "ssize_1000" , "savg_frpl0" , "savg_hisp0" , "savg_black0" ,
             "prop_new" , "principal_yrs" , "principal_transition")
 
 names(dat)
+
+# Our years are number of lags, so 5 is the furthest in the past year.
 pre_years = paste0( "savg_math", 5:0 )
 pre_years
 
-# TODO CHECK: pre_years should be in ascending order. Is savg_math5 5
-# years before treatment?  Or how does ordering go?
-
-# TODO CHECK: This is the outcome after treatment, yes?
+# This is the outcome after treatment
 tx_year = "savg_math"
 
 
 #### Drop all 0s in the outcomes ####
 
-# head(dat)
-# maths = which( str_detect( names(dat), "savg_math",  ) )
-# for ( m in maths ) {
-#     zeros = dat[[m]] == 0
-#     dat[zeros,m] = NA
-# }
-# nrow(dat)
-# dat = na.omit( dat )
-# nrow(dat)
+head(dat)
+maths = which( str_detect( names(dat), "savg_math",  ) )
+for ( m in maths ) {
+    zeros = dat[[m]] == 0
+    dat[zeros,m] = NA
+}
+nrow(dat)
+dat = na.omit( dat )
+nrow(dat)
+
 
 
 #### Diagnostic for Matching on X or X and YPre ####
@@ -49,11 +47,7 @@ tx_year = "savg_math"
 source( "DiD_matching_func.R" )
 
 
-# This appears to produce most of the numbers in Table 1 for the X&Y_pre values.
-#
-# TODO: Add s to row of estimates to complete table 1
-#
-# TODO: It looks like the X bias is different from Table 1.  Need to check.  Also the delta_x entries seem to be off?
+# This produces the numbers in Table 1 for the X&Y_pre values.
 res = DiD_matching_guideline( Y_pre = pre_years,
                               Y_post = tx_year,
                               treatment = "treat",
@@ -63,15 +57,6 @@ res = DiD_matching_guideline( Y_pre = pre_years,
 res
 
 
-# result for third row second column of Table 1
-
-# NOTE: This does not entirely align with the above guideline call or
-# Table 1 from paper.  Need to check for errors?
-res_XY = calc_matchXY_diagnostics( data = dat,
-                                   years=c( pre_years, tx_year ),
-                                   treat="treat", control_vars = c_vars )
-
-res_XY
 
 
 
@@ -87,7 +72,9 @@ res_stg = DiD_matching_guideline_staggered( Y_pre = pre_years,
 res_stg
 
 
-# If we want to see all the cohorts separately
+
+# If we want to see all the cohorts separately, we can set a flag to
+# get them.
 res_stg_full = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                             Y_post = tx_year,
                                             treatment = "treat",
@@ -96,54 +83,6 @@ res_stg_full = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                             data = dat,
                                             aggregate_only = FALSE )
 res_stg_full
-
-
-
-
-
-#### Summary statistics calculated with old code ####
-
-years = c( pre_years, tx_year )
-years
-
-models = calc_summary_statistics( dat, years, treat = "treat",
-                                  control_vars = c_vars )
-
-models
-
-delta_x = calc_X_imbalance(dat, treat="treat", control_vars = c_vars )
-delta_x
-
-
-
-# Calculate numbers on Table 1 (left column)
-results = calc_matchX_diagnostics( models=models, delta_x=delta_x )
-
-# Contains results for first column of Table 1
-round( results$delta_x, digits = 2 )
-round( results$Delta_x, digits = 2 )
-results$delta_tau_x
-
-
-# compare to our function call...
-res
-
-
-
-
-#### Appendix tables of model results ####
-
-# this code is used to generated Table 2 in Appendix
-library(stargazer)
-if ( FALSE ) {
-    # Latex version
-    results$models %>% filter( year >= -1 ) %>%
-        pull( model ) %>%
-        stargazer()
-}
-results$models %>% filter( year >= -1 ) %>%
-    pull( model ) %>%
-    stargazer(type = "text")
 
 
 
@@ -176,9 +115,6 @@ if ( FALSE ) {
     matched_controls = final_df[as.numeric(matching$match.matrix), ]
 
     (mean(trt$savg_math) - mean(matched_controls$savg_math) )-  (mean(trt$savg_math0) - mean(matched_controls$savg_math0) )
-
-
-
 
 
 }
