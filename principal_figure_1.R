@@ -47,15 +47,18 @@ datL <- dat %>%
             `savg_math-1` = savg_math ) %>%
     pivot_longer( cols = starts_with("savg_math"), names_to = "year",
                   values_to= "savg_math", names_prefix = "savg_math", names_transform = as.integer ) %>%
-    mutate( year = 5 - year ) %>%
+    mutate( year = 5 - year )
+
+
+datG <- datL %>%
 #    filter( savg_math != 0 ) %>%  # needed?
     group_by( start_year ) %>%
     mutate( year.f = factor(year) ) %>%
     nest()
 
-datL
-datL$data[[1]]
-levels( datL$data[[1]]$year.f)
+datG
+datG$data[[1]]
+levels( datG$data[[1]]$year.f)
 
 
 # NOTE: By having 0 for average math for missing data, even the early
@@ -68,7 +71,7 @@ levels( datL$data[[1]]$year.f)
 
 # testing
 if ( FALSE ) {
-    dd = datL$data[[6]]
+    dd = datG$data[[6]]
     head(dd)
 
     mod = lm( savg_math ~ year.f * treat - 1 - treat, data=dd )
@@ -86,12 +89,16 @@ if ( FALSE ) {
 }
 
 
+
+
+
 #### Fit event study model to each cohort and average ####
 
 
-mods_df = datL$data %>%
-    set_names( datL$start_year ) %>%
+mods_df = datG$data %>%
+    set_names( datG$start_year ) %>%
     map_df( function( dd ) {
+
         mod = lm( savg_math ~ year.f * treat - 1 - treat, data=dd )
 
         cc <- broom::tidy(mod) %>%
@@ -142,11 +149,13 @@ modsL %>%
 
 # This plots levels averaged across cohort
 sum_plot <- modsL %>% group_by( Z, year ) %>%
-    summarise( std_math = mean( std_math ) )
+    summarise( std_math = weighted.mean( std_math, w=nTx ) )
 
 ggplot( sum_plot, aes( year, std_math, col=Z ) ) +
-    geom_line() +
+    geom_line() + geom_point() +
     theme_minimal()
+
+
 
 
 
