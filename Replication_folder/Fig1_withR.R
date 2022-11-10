@@ -18,6 +18,8 @@ length( unique( dat$school_id ) )
 # Drop the out of bounds time values
 dat = filter( dat, dat$time != 98, dat$time != 99 )
 
+
+
 #### Explore data structure ####
 
 filter( dat, dyear == 100 )
@@ -39,9 +41,10 @@ dat = within(dat, time <- relevel(time, ref = "5"))
 
 
 a_lm = lm(savg_math ~ time*treat +
-           savg_frpl + savg_black + savg_hisp + ssize_100,
-       data = dat,
-       weights = dat$weight_k)
+              savg_frpl + savg_black + savg_hisp + ssize_100,
+          data = dat,
+          weights = dat$weight_k)
+
 
 # I had to used this felm linear regression as it allows us to
 # replicate the "absorb()" function in Stata that accounts for fixed
@@ -58,17 +61,27 @@ a = felm(savg_math ~ time*treat +
 coef( a )
 coef( a_lm )
 
+
+cos = filter( dat, treat == 0 )
+a_co = felm( savg_math ~ time +
+                 savg_frpl + savg_black + savg_hisp + ssize_100 | school_id + dyear,
+             dat,
+             weights = dat$weight_k )
+
+
 # compare estimates
 a_df = tibble( coef = names( coef(a) ), est = coef( a ) )
 a_lm_df = tibble( coef = names( coef(a_lm) ), est = coef( a_lm ) )
-full_join(a_df, a_lm_df, by="coef" ) %>%
+a_co_df = tibble( coef = names( coef(a_co) ), est = coef( a_co ) )
+full_join(a_lm_df, a_df, by="coef", suffix = c( ".lm", ".felm" ) ) %>%
+    full_join( a_co_df, by = "coef" ) %>%
     print( n = 100 )
 
 
 get_coefs <- function( a ) {
     # just adding zero for the fifth time
-    a$coefficients[1:6,]
-    control_match_R = c(a$coefficients[1:5], 0, a$coefficients[6])
+    cmtch = which( str_detect( names(coef(a)), "time" ) )
+    control_match_R = c(a$coefficients[ cmtch[1:5] ], 0, a$coefficients[ cmtch[[6]] ] )
 
     a$coefficients
     mtch = which( str_detect( names(coef(a)), ":treat1" ) )
@@ -116,8 +129,15 @@ datG <- dat %>%
     nest()
 
 datG
-datG$data[[1]]
+dd = datG$data[[1]]
 
+#dd = bind_rows( datG$data[[2]], dd )
+mod = felm(savg_math ~ time*treat +
+               savg_frpl + savg_black + savg_hisp + ssize_100,
+           data = dd )
+coef( mod )
+mod$coefficients
+get_coefs(mod)
 
 # Fit event study model to each cohort and average
 
@@ -127,8 +147,8 @@ mods_df = datG$data %>%
     map_df( function( dd ) {
 
         mod = felm(savg_math ~ time*treat +
-                     savg_frpl + savg_black + savg_hisp + ssize_100 | school_id,
-                 dd )
+                       savg_frpl + savg_black + savg_hisp + ssize_100,
+                   dd )
 
         cc = get_coefs(mod)
         cc$n = nrow(dd)
@@ -136,7 +156,11 @@ mods_df = datG$data %>%
         cc
     }, .id = "year0" )
 
-mods_df
+head( mods_df )
+
+ggplot( mods_df, aes( time, y, col=group, group=interaction(group,year0) ) ) +
+    geom_line()
+
 
 agg <- mods_df %>% group_by( group, time ) %>%
     summarise( y = weighted.mean( y, w = n_tx ), .groups="drop" )
@@ -145,13 +169,19 @@ agg$group = paste0( agg$group, "-agg" )
 
 pall = bind_rows( plot_df_R, agg )
 
-pall %>% filter( group != "New Principal-agg" ) %>%
+
+
+##### Final plot ######
+
+pall %>%
+    filter( group != "New Principal-agg" ) %>%
     ggplot(aes(x = time, y = y, group = group)) +
     geom_point(aes(color = group), size = s) +geom_line(aes(color = group), size = 2) +
     geom_hline(yintercept = 0, color = "black", size = 2, linetype = "dashed")  +
     scale_x_continuous(breaks = c(-5, -4, -3, -2, -1, 0, 1)) +
     scale_colour_manual(values = c("dark green", "red", "blue", "gray")) +
     xlab("Years Relative to Principal Change") + ylab("")
+
 
 
 
