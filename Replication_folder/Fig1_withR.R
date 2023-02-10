@@ -146,10 +146,11 @@ mods_df = datG$data %>%
     set_names( datG$year0 ) %>%
     map_df( function( dd ) {
 
-        mod = felm(savg_math ~ time*treat +
-                       savg_frpl + savg_black + savg_hisp + ssize_100,
-                   dd )
-
+     #   mod = felm(savg_math ~ time*treat +
+      #                 savg_frpl + savg_black + savg_hisp + ssize_100,
+     #              data = dd )
+           mod = felm(savg_math ~ time*treat,
+                      data = dd )
         cc = get_coefs(mod)
         cc$n = nrow(dd)
         cc$n_tx = sum( dd$treat == 1 )
@@ -159,6 +160,7 @@ mods_df = datG$data %>%
 head( mods_df )
 
 ggplot( mods_df, aes( time, y, col=group, group=interaction(group,year0) ) ) +
+    facet_wrap( ~ group ) +
     geom_line()
 
 
@@ -183,6 +185,31 @@ pall %>%
     xlab("Years Relative to Principal Change") + ylab("")
 
 
+
+#### Further exploration #####
+
+head( dat )
+
+agg = dat %>%
+    filter( treat == 0 ) %>%
+    group_by( year0, time ) %>%
+
+    summarise( y = mean( savg_math, na.rm=TRUE ),
+               n = n () ) %>%
+    mutate( time = as.numeric(time) ) %>%
+    group_by( year0 ) %>%
+    mutate( y = y - y[ time == 6 ] ) %>%
+    filter( !is.na( y ), time <= 7 )
+agg
+
+a_agg = agg %>%
+    group_by( time ) %>%
+    summarise( y = weighted.mean( y, n ) )
+a_agg
+
+ggplot( agg, aes( time, y ) ) +
+    geom_line( aes( group = year0 ), alpha=0.5 ) +
+    geom_line( data=a_agg, col="red",lwd=1 )
 
 
 

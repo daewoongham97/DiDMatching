@@ -13,7 +13,7 @@
 #'
 #' @param Y_pre A vector of strings for the column name(s) of data
 #'   that contains the pre-treatment outcome(s)
-#' @param Y_post A string containing the column name of dasta that
+#' @param Y_post A string containing the column name in data that
 #'   contains the post-treatment outcome
 #' @param treatment A string containing the column name of data that
 #'   contains the binary treatment indicator (0 or 1). Treatment
@@ -45,6 +45,12 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
 
     ctrl = data[data[[treatment]] == 0, ]
     trt = data[data[[treatment]] == 1, ]
+    if ( nrow( ctrl ) == 0 ) {
+        stop( "No control units" )
+    }
+    if ( nrow( trt ) == 0 ) {
+        stop( "No treated units" )
+    }
 
     n = nrow(data)
     n_tx = nrow(trt)
@@ -53,8 +59,7 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
     if (length(X) > 1) {
         est_delta_x = colMeans(trt[, X]) - colMeans(ctrl[, X])
     } else {
-        est_delta_x = mean(trt[, X]) - mean(ctrl[, X])
-
+        est_delta_x = mean(trt[[X]]) - mean(ctrl[[X]])
     }
 
     reg_x_pre = list()
@@ -152,22 +157,104 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data) {
 }
 
 
+#' Given data in long form, make stacked data for staggared adoption
+#' analysis
+#'
+#' This code modified from
+#' https://stackoverflow.com/questions/26497751/pass-a-vector-of-variable-names-to-arrange-in-dplyr
+#' and
+#' https://gist.github.com/mpettis/c4a4e930e6e0d69b25249484378e9f5f
+#' Thanks to these authors for this cleverness!
+#'
+#' @param data Dataframe with columns of ID, year, treat, and outcome
+#'   (and possibly other things as well).
+#' @param ID Name of ID of unit
+#' @param year Year or time variable, assumed sequential with no gaps
+#' @param outcome The thing to lag.
+#' @param n_lags Number of lagged timepoints to generate
+#'
+#' @return Same dataset with lagged columns named lag_1 ...
+#'   lag_{n_lags}.
+add_lagged_outcomes = function( data, ID, year, outcome, n_lags = 5 ) {
+
+    lags <- seq(n_lags)
+    lag_names <- paste("lag",
+                       formatC(lags, width = nchar(max(lags)), flag = "0"),
+                       sep = "_")
+    lag_functions = map( lags, ~ eval( parse( text=glue::glue( "function( x ) {{  lag( x, {.x} ) }} " ) ) ) ) %>%
+        set_names(lag_names)
+
+    data <- data %>% arrange( across( c( ID, year ) ) ) %>%
+        group_by( across( ID ) ) %>%
+        mutate( across( all_of( outcome ), .fns = lag_functions, .names = "{.fn}" ) ) %>%
+        ungroup()
+
+    drp = is.na( data[[lag_names[n_lags]]] )
+    data = data[ !drp, ]
+}
+
+if ( FALSE ) {
+    # Testing
+    d <- tibble(x = seq_len(13),
+                y = 10 * seq_len(13),
+                year = 2000 + c( 1:7, 1:6 ),
+                treat = rep( 0, 13 ),
+                G = rep( c("A","B"), c(7, 6 ) ) )
+    d$treat[10] = 1
+    d = sample_n( d, nrow(d) )
+    d
+    add_lagged_outcomes(d, ID = "G", year = "year", outcome="y",
+                        n_lags = 3 )
+}
+
 
 
 #' Calculate matching guidelines for staggered adoption data
 #'
-#' This assumes data has been "stacked", meaning we have 1 row (with
-#' lagged outcomes) for each unit by time combination.
+#' This can take data either in "long form" where each institution has
+#' a row for each year of data, and a treatment indicator for each
+#' year as well, or "stacked", meaning we have 1 row (with lagged
+#' outcomes) for each unit by time combination.
+#'
+#' In the case of it being in long form, the assumption is group is
+#' the year (timepoint) of the observation.
 #'
 #' @inheritParams DiD_matching_guideline
-#' @param group Character name of grouping variable for different starting
-#'   points of treatment onset.
 #'
-DiD_matching_guideline_staggered = function(Y_pre, Y_post, treatment, group, X, data,
-                                            aggregate_only = FALSE ) {
+#' @param group Character name of grouping variable for different
+#'   starting points of treatment onset.
+#' @param add_lagged_outcomes If TRUE then assume data is in long
+#'   form, calculate lagged outcomes from the data, and take Y_post as
+#'   the name of the outcome variable.  If FALSE, then assume data is
+#'   in stacked.
+#' @param aggregate_only If TRUE, return only the averaged result.  If
+#'   FALSE, return the individual year analyses along with the
+#'   aggregate analysis (listed as "ALL")
+#' @param n_lags Number of lags to calculate, if add_lagged_outcomes =
+#'   TRUE.
+#'
+DiD_matching_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group, X, data,
+                                            add_lagged_outcomes = FALSE,
+                                            aggregate_only = FALSE,
+                                            n_lags = 5 ) {
 
-    gdat <- dat %>% group_by_at( group ) %>%
+    if ( add_lagged_outcomes ) {
+        stopifnot( !is.null( n_lags ) && is.numeric( n_lags ) )
+        data = add_lagged_outcomes( data = data,
+                                    ID = ID, year = group,
+                                    outcome = Y_post,
+                                    n_lags = n_lags )
+        nms = names(data)
+        Y_pre = nms[ startsWith(nms, "lag_")]
+    }
+
+    gdat <- data %>% group_by_at( group ) %>%
         nest()
+
+    gdat$n_tx = map_dbl( gdat$data, function(x) { sum( x[[treatment]] ) } )
+    gdat$n = map_dbl( gdat$data, nrow )
+    gdat <- filter( gdat, n_tx > 0 && n_tx < n )
+    gdat$n = gdat$n_tx = NULL
 
     res <- map( gdat$data, DiD_matching_guideline,
                 Y_pre = Y_pre, Y_post = Y_post,

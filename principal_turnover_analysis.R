@@ -1,5 +1,5 @@
 #
-# Do principal emperical analysis in the paper
+# Conduct the principal turnover empirical analysis from the paper
 #
 
 
@@ -12,7 +12,7 @@ library( haven )
 
 #### Load data #####
 
-dat = read_csv( here::here("../data/cleaned_data.csv" ) )
+dat = read_csv( here::here("../data/cleaned_data.csv" ), show_col_types = FALSE )
 
 c_vars = c( "ssize_1000" , "savg_frpl0" , "savg_hisp0" , "savg_black0" ,
             "prop_new" , "principal_yrs" , "principal_transition")
@@ -46,6 +46,9 @@ nrow(dat)
 
 source( "DiD_matching_func.R" )
 
+dat_sub = dat %>%
+    dplyr::select( all_of( c( pre_years, tx_year, "treat", c_vars ) ) )
+dat_sub
 
 # This produces the numbers in Table 1 for the X&Y_pre values.
 res = DiD_matching_guideline( Y_pre = pre_years,
@@ -94,11 +97,12 @@ res_stg_full
 if ( FALSE ) {
 
 
-    # The following is code for point estimates of the naive DiD and matching estimators used
-    # only for illustrative purposes.
+    # The following is code to actually conduct the matching in order
+    # to obtain point estimates of the naive DiD and matching
+    # estimators. Used only for illustrative purposes.
 
     ## Naive DiD Estimates
-    (mean(trt$savg_math) - mean(ctrl$savg_math) )-  (mean(trt$savg_math0) - mean(ctrl$savg_math0) )
+    (mean(trt$savg_math) - mean(ctrl$savg_math) ) - (mean(trt$savg_math0) - mean(ctrl$savg_math0) )
 
     ## DiD Estimates while matching on X
     library(MatchIt)
@@ -114,7 +118,7 @@ if ( FALSE ) {
 
     matched_controls = final_df[as.numeric(matching$match.matrix), ]
 
-    (mean(trt$savg_math) - mean(matched_controls$savg_math) )-  (mean(trt$savg_math0) - mean(matched_controls$savg_math0) )
+    (mean(trt$savg_math) - mean(matched_controls$savg_math) ) -  (mean(trt$savg_math0) - mean(matched_controls$savg_math0) )
 
 
 }
