@@ -84,13 +84,13 @@ res
 
 # For staggered adoption, we would have a set of schools with outcomes and treatment indicators such as:
 
-school_A = tribble( ~ year, ~ treat, ~ outcome,
-                    2005, 0, 102,
-                    2006, 0, 120,
-                    2007, 0, 130,
-                    2008, 0, 131,
-                    2009, 1, 111,
-                    2010, 0, 141)
+school_A = tribble( ~ year, ~ treat, ~ outcome, ~ X,
+                    2005, 0, 102, 5,
+                    2006, 0, 120, 5,
+                    2007, 0, 130, 5,
+                    2008, 0, 131, 5,
+                    2009, 1, 111, 5,
+                    2010, 0, 141, 5 )
 
 # We then repeatedly analyse our data, year by year.  For example, for
 # year 2008, we would call 2007 pre-treatment, and school A would be

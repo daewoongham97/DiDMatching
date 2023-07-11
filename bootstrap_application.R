@@ -1,8 +1,9 @@
+
 library(haven); library(stargazer); library(devtools); library(dplyr); library(tidyr)
 library(purrr); library(stringr)
 
 #dat = read_csv( here::here("~/Downloads/cleaned_data.csv" ), show_col_types = FALSE )
-dat = read.csv("~/Downloads/cleaned_data.csv")
+dat = read.csv( here::here( "../data/cleaned_data.csv") )
 c_vars = c( "ssize_1000" , "savg_frpl0" , "savg_hisp0" , "savg_black0" ,
             "prop_new" , "principal_yrs" , "principal_transition")
 
@@ -383,7 +384,7 @@ for (i in 1:B) {
   bias_reduc_X[i] = new_result$result$bias_reduction[1]
   bias_reduc_Y[i] = new_result$result$bias_reduction[2]
   decision[i] = new_result$result$match[2]
-  
+
   yearly_result = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                                     Y_post = tx_year,
                                                     treatment = "treat",
