@@ -1,8 +1,9 @@
+
 library(haven); library(stargazer); library(devtools); library(dplyr); library(tidyr)
 library(purrr); library(stringr)
 
 #dat = read_csv( here::here("~/Downloads/cleaned_data.csv" ), show_col_types = FALSE )
-dat = read.csv("~/Downloads/cleaned_data.csv")
+dat = read.csv( here::here( "../data/cleaned_data.csv") )
 c_vars = c( "ssize_1000" , "savg_frpl0" , "savg_hisp0" , "savg_black0" ,
             "prop_new" , "principal_yrs" , "principal_transition")
 
@@ -21,8 +22,8 @@ tx_year = "savg_math"
 head(dat)
 maths = which( str_detect( names(dat), "savg_math",  ) )
 for ( m in maths ) {
-  zeros = dat[[m]] == 0
-  dat[zeros,m] = NA
+    zeros = dat[[m]] == 0
+    dat[zeros,m] = NA
 }
 nrow(dat)
 dat = na.omit( dat )
@@ -32,57 +33,79 @@ nrow(dat)
 
 #### Diagnostic for Matching on X or X and YPre ####
 
+source( here::here( "DiD_matching_func.R" ) )
 
-source_url("https://raw.githubusercontent.com/daewoongham97/DiDMatching/main/DiD_matching_func.R")
 
 ## bootstrap procedure
-B = 1000
-rel = s = vector()
-bias_reduc_X = bias_reduc_Y = vector()
-decision = yearly_count_match = vector()
+B = 100
+res = list( NA, B )
+
 unique_schools = unique(dat$school_id)
 
 
-for (i in 1:B) {
-  #for reproduciblility purposes between you and me Luke
-  set.seed(i)
-  # for bootstrapping schools
-  bootstrapped_schools = sample(unique_schools, replace = TRUE)
-  in_idx = dat$school_id %in% bootstrapped_schools
-  boot_df = dat[in_idx, ]
-  
-  new_result = DiD_matching_guideline_staggered( Y_pre = pre_years,
-                                                 Y_post = tx_year,
-                                                 treatment = "treat",
-                                                 group = "year",
-                                                 X = c_vars,
-                                                 data = boot_df,
-                                                 aggregate_only = FALSE )
+one_boot <- function( seed ) {
+    set.seed(seed)
+    # for bootstrapping schools
+    bootstrapped_schools = sample(unique_schools, replace = TRUE)
+    in_idx = dat$school_id %in% bootstrapped_schools
+    boot_df = dat[in_idx, ]
 
-
-  rel[i] = new_result[new_result$year == "ALL", ]$statistic[[1]]$statistic[1]
-  s[i] = new_result[new_result$year == "ALL", ]$statistic[[1]]$statistic[2]
-  bias_reduc_X[i] = as.numeric(new_result[new_result$year == "ALL", ][1, 4])
-  bias_reduc_Y[i] = as.numeric(new_result[new_result$year == "ALL", ][2, 4])
-  decision[i] = as.numeric(rel[i] >= 1 - abs(1 - s[i]))
-  
-  yearly_result = DiD_matching_guideline_staggered( Y_pre = pre_years,
-                                                    Y_post = tx_year,
-                                                    treatment = "treat",
-                                                    group = "year",
-                                                    X = c_vars,
-                                                    data = boot_df,
-                                                    aggregate_only = FALSE)
-  yearly_count_match[i] = 12 - length(which(new_result$match == 0))
-  print(i)
+    new_result = DiD_matching_guideline_staggered( Y_pre = pre_years,
+                                                   Y_post = tx_year,
+                                                   treatment = "treat",
+                                                   group = "year",
+                                                   X = c_vars,
+                                                   data = boot_df,
+                                                   aggregate_only = FALSE )
+    new_result
 }
 
-quantile(rel, c(0.025, 0.975))
-quantile(s, c(0.025, 0.975))
-quantile(bias_reduc_X, c(0.025, 0.975))
-quantile(bias_reduc_Y, c(0.025, 0.975))
+res = map_df( 1:B, one_boot, .id = "runID")
 
-table(decision)
 
-summary(yearly_count_match)
+
+years = filter( res, year == "ALL" )
+years
+
+# Looking at individual year stability
+res = filter( res, year != "ALL" )
+
+counts <- res %>%
+    filter( what != "X" ) %>%
+    group_by( runID ) %>%
+    summarise( n = sum( match ),
+               N = n() )
+table( counts$n )
+
+
+# How did match decisions and bias reduction vary across years?
+res %>% group_by( year ) %>%
+    filter( what != "X" ) %>%
+    summarise( match = mean( match ),
+               CI_l = quantile( bias_reduction, 0.05 ),
+               CI_h = quantile( bias_reduction, 0.95 ),
+               n = n() )
+
+# How did aggregate statistics vary?
+years %>%
+    dplyr::select(-delta) %>%
+    filter( what != "X" ) %>%
+    unnest( statistic ) %>%
+    group_by( quantity ) %>%
+    summarise( CI_l = quantile( statistic, 0.025 ),
+               CI_h = quantile( statistic, 0.975 ) )
+
+# How did aggregate bias reduction and overall match recommendation
+# vary?
+years %>%
+    group_by( what ) %>%
+    summarise( per_match = mean( match ),
+               match_CI_l = quantile( match, 0.025 ),
+               match_CI_h = quantile( match, 0.975 ),
+               per_aggmatch = mean( agg_match ),
+               bias_CI_l = quantile( bias_reduction, 0.025 ),
+               bias_CI_h = quantile( bias_reduction, 0.975 ) )
+
+
+
 
