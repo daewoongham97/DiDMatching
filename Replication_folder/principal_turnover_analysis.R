@@ -44,26 +44,14 @@ nrow(dat)
 #### Diagnostic for Matching on X or X and YPre ####
 
 
+# Note: We do this with the staggered adoption call.  Ignoring
+# staggered adoption gives basically the same results (see supplement,
+# below).
+
+# QUESTION: Is the supplement, below, needed or correct given the
+# staggered adoption?
+
 source( "DiD_matching_func.R" )
-
-dat_sub = dat %>%
-    dplyr::select( all_of( c( pre_years, tx_year, "treat", c_vars ) ) )
-dat_sub
-
-# This produces the numbers in Table 1 for the X&Y_pre values.
-res = DiD_matching_guideline( Y_pre = pre_years,
-                              Y_post = tx_year,
-                              treatment = "treat",
-                              X = c_vars,
-                              data = dat)
-
-res
-
-
-
-
-
-#### doing the staggered adoption call: basically the same results! ####
 
 res_stg = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                             Y_post = tx_year,
@@ -85,8 +73,60 @@ res_stg_full = DiD_matching_guideline_staggered( Y_pre = pre_years,
                                                  X = c_vars,
                                                  data = dat,
                                                  aggregate_only = FALSE )
-res_stg_full
+res_stg_full %>%
+    filter( what != "X" ) %>%
+    print( n = 100 )
 
+
+
+
+#### Bootstrapping the result ####
+
+# To do bootstrap to get sensitivity on the estimated guidelines we
+# use the bootstrap_guideline_staggered() method:
+source( here::here( "bootstrap_guideline_function.R" ) )
+
+## bootstrap procedure
+res = bootstrap_guideline_staggered( Y_pre = pre_years,
+                                     Y_post = tx_year,
+                                     treatment = "treat",
+                                     id = "school_id",
+                                     group = "year",
+                                     X = c_vars,
+                                     data = dat,
+                                     B = 100 )
+
+
+
+
+#### Specifying r_theta directly as sensitivity check ####
+
+
+# Do sensitivity analysis where we set r_theta
+r_theta = c(0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.875, 0.9, 0.95)
+
+result = map( r_theta, ~ DiD_matching_guideline_staggered( Y_pre = pre_years,
+                                                           Y_post = tx_year,
+                                                           treatment = "treat",
+                                                           group = "year",
+                                                           X = c_vars,
+                                                           data = dat,
+                                                           aggregate_only = TRUE,
+                                                           r_theta = . ) )
+result = transpose(result) %>%
+    as_tibble()
+result
+
+result %>%
+    mutate( r_theta = r_theta ) %>%
+    dplyr::select( -delta ) %>%
+    unnest( result ) %>%
+    filter( what != "X" ) %>%
+    unnest( statistic ) %>%
+    pivot_wider( names_from = "quantity", values_from="statistic" ) %>%
+    dplyr::select( -n, -n_tx, -what, -`Reliability (rho)` ) %>%
+    relocate( r_theta ) %>%
+    mutate( agg_match = ifelse( r_theta >= (1 - abs(1-s) ), "yes", "no" ) )
 
 
 
@@ -124,7 +164,25 @@ if ( FALSE ) {
 }
 
 
+##### Supplement: Ignoring staggered adoption #####
 
+if ( FALSE ) {
+
+    source( "DiD_matching_func.R" )
+
+    dat_sub = dat %>%
+        dplyr::select( all_of( c( pre_years, tx_year, "treat", c_vars ) ) )
+    dat_sub
+
+    # This produces the numbers in Table 1 for the X&Y_pre values.
+    res = DiD_matching_guideline( Y_pre = pre_years,
+                                  Y_post = tx_year,
+                                  treatment = "treat",
+                                  X = c_vars,
+                                  data = dat)
+
+    res
+}
 
 
 

@@ -1,3 +1,12 @@
+
+# This script explores an alternate selection mechanism where
+# treatment is a function of the lagged outcome, whcih means it not
+# only depends on theta and X, but also on the residual of Y_pre.
+#
+# The goal of this script is to explore what happens when we apply our
+# guidelines to this misspecified model.
+
+
 library(MatchIt)
 
 N = 100000
@@ -45,14 +54,14 @@ e_naive_DiD = e_DiD_match_both = vector()
 o_naive_DiD = o_DiD_match_both = vector()
 
 for (i in 1:length(sigma_E_2)) {
-  
+
   sigma = sigma_E_2[i]
   theta = rnorm(N, mean = mu_theta)
   #X = rnorm(N, mean = mu_x)
   e = rnorm(N, sd = sqrt(sigma))
   Y_pre = theta + e
   Y_post = 1.5*theta + rnorm(N, sd = sqrt(0.01))
-  
+
   trt = as.numeric(probit_coef*Y_pre + rnorm(N) < 0)
 
   trt_theta = theta[trt == 1]
@@ -60,7 +69,7 @@ for (i in 1:length(sigma_E_2)) {
   # population parameter estimates
   sigma_theta = var(trt_theta) # conditional variance of theta (using from treatment)
   d_theta = mean(trt_theta) - mean(ctrl_theta) # confoundness
-  
+
   ## naive DiD bias calculation (omitted from figure but I did it anyways)
   # calculating expected bias from formula is just (1.5 - 1.0)*d_theta
   e_naive_DiD[i] = 0.5*(d_theta)
@@ -68,7 +77,7 @@ for (i in 1:length(sigma_E_2)) {
   o_naive_DiD[i] = (mean(Y_post[trt == 1]) - mean(Y_post[trt == 0])) -
     (mean(Y_pre[trt == 1]) - mean(Y_pre[trt == 0]))
 
-  ## matching on Y DiD 
+  ## matching on Y DiD
   # first calculate the theoretical bias is reliability * beta_theta_post * d_theta
   rel = sigma_theta/(sigma_theta + sigma)
   e_DiD_match_both[i] = 1.5*((1 - rel)*d_theta)
@@ -95,8 +104,8 @@ plot = ggplot(data = plot_df, aes(x = sigma_E, y = match_DiD, col = group)) + ge
                                                                                                                                                                                                                            axis.line = element_line(colour = "black"), legend.position= "top", legend.title=element_blank(),
                                                                                                                                                                                                                            legend.text=element_text(size=a1), plot.title = element_text(size = a2, face = "bold"),
                                                                                                                                                                                                                            axis.title.x = element_text(vjust=-0.5))
-pdf(file = "~/Downloads/alt_selection_fig.pdf",   
-    width = 8, 
+pdf(file = "~/Downloads/alt_selection_fig.pdf",
+    width = 8,
     height = 6)
 
 plot

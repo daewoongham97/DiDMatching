@@ -1,3 +1,10 @@
+
+#
+# Figure 3 in main paper
+#
+# Plot showing how the three approaches have different biases under different specifications.
+#
+
 library(ggplot2); library(latex2exp); library(gridExtra); library(ggpubr)
 
 # Figure specifications
@@ -115,6 +122,8 @@ plot_df_3$group = factor(plot_df_3$group)
 plot_3 = ggplot(data = plot_df_3, aes(x = x, y = bias, col = group)) + geom_line(size = 2) + xlab("Correlation") + ylab("") + ggtitle("") + theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.position=c(0.75, 0.15), legend.title=element_blank(),legend.text=element_text(size=a1), plot.title = element_text(size = a2, face = "bold"), axis.title.x = element_text(vjust=-0.5))
 
 fig_3 = ggarrange(plot_1, plot_2, plot_3, common.legend = TRUE, nrow = 1)
+
+fig_3
 
 ggsave(file="Figures/Fig3.pdf", fig_3,  width = 12, height = 5, device = "pdf")
 

@@ -1,5 +1,5 @@
 ---
-title: "multiple_time_periods_check"
+title: "multiple time periods check"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -12,29 +12,29 @@ This document produces Figure 3 and Table 2 when checking for robustness to assu
 # below we have a 3 pre-period setting DGP generation.
 library(MASS)
 make_data = function(N, seed = 7, beta_theta_1, beta_theta_0, mu_theta_1, mu_theta_0, sig_theta = 1, sigma_pre = 1.3, sigma_post = 1, p = 0.2, t) {
-  set.seed(seed)
-  treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
-  theta = rep(NA, N)
-  mu_1 = c(mu_theta_1)
-  mu_0 = c(mu_theta_0)
- 
-  treats = rnorm(sum(treatment == 1), mu_theta_1, sig_theta)
-  
-  controls = rnorm(sum(treatment == 0), mu_theta_0, sig_theta)
-  
-  theta[treatment == 1] = treats
-  theta[treatment == 0] = controls
-  
-  Y_pre = list()
-  Y_post = 2 + beta_theta_1*theta + rnorm(N, mean = 0, sd = sigma_post)
-  df = data.frame(Y_post, treatment = treatment, theta)
-  names = vector()
-  for (i in 1:(t)) {
-    df = cbind(df, beta_theta_0[i]*theta + rnorm(N, mean = 0, sd = sigma_pre))
-    names[i] = paste0("Y_pre_",i-1)
-  }
-  colnames(df)[4:(length(colnames(df)))] = names
-  return(df)
+    set.seed(seed)
+    treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
+    theta = rep(NA, N)
+    mu_1 = c(mu_theta_1)
+    mu_0 = c(mu_theta_0)
+    
+    treats = rnorm(sum(treatment == 1), mu_theta_1, sig_theta)
+    
+    controls = rnorm(sum(treatment == 0), mu_theta_0, sig_theta)
+    
+    theta[treatment == 1] = treats
+    theta[treatment == 0] = controls
+    
+    Y_pre = list()
+    Y_post = 2 + beta_theta_1*theta + rnorm(N, mean = 0, sd = sigma_post)
+    df = data.frame(Y_post, treatment = treatment, theta)
+    names = vector()
+    for (i in 1:(t)) {
+        df = cbind(df, beta_theta_0[i]*theta + rnorm(N, mean = 0, sd = sigma_pre))
+        names[i] = paste0("Y_pre_",i-1)
+    }
+    colnames(df)[4:(length(colnames(df)))] = names
+    return(df)
 }
 ```
 
@@ -43,110 +43,118 @@ make_data = function(N, seed = 7, beta_theta_1, beta_theta_0, mu_theta_1, mu_the
 # I only use this function because I coded this almost a year ago and just kept it
 # but it is the same as what we are doing 
 DiD_matchy_guideline = function(Y_pre, Y_post, treatment, data) {
-  t = length(Y_pre)
-  # getting the new response based on the average of all the pre-treatment (residualized) outcomes
-  
-  ctrl = data[data$treatment ==0, ]
-  
-  Y_res = ctrl[, Y_pre[-1]]
-  Y_res = apply(Y_res, 1, mean)
-  
-  est_sig_pre = var(ctrl[, Y_pre[1]] - Y_res)/(1 + 1/(t-1))
-  
-  emp_cov = cov(ctrl[, Y_pre[1]] , ctrl[, Y_post])
-  v_t = var(ctrl[, Y_pre[1]])
-
-  est_beta_theta_pre = sqrt(v_t - est_sig_pre)
-  est_beta_theta_post = emp_cov/est_beta_theta_pre
-  
-  est_Delta_theta = est_beta_theta_post - est_beta_theta_pre
-  
-  ratio = est_beta_theta_pre/est_beta_theta_post; ratio
-
-  r_theta = t*est_beta_theta_pre^2/(t*est_beta_theta_pre^2 + est_sig_pre)
-
-  # checking condition in Guideline (result for second row second column of Table 1)
-  condition = r_theta >= 1 - abs(1 - ratio)
-
-  est_delta_theta = (mean(data[, Y_pre[1]][data$treatment == 1]) - mean(data[, Y_pre[1]][data$treatment == 0]))/est_beta_theta_pre
-
-  est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
-  
-  result = data.frame(est_sig_pre, est_beta_theta_pre, est_beta_theta_post, est_Delta_theta, ratio, r_theta, est_delta_theta, est_tau_xy)
-  return(result)
+    t = length(Y_pre)
+    # getting the new response based on the average of all the pre-treatment (residualized) outcomes
+    
+    ctrl = data[data$treatment ==0, ]
+    
+    Y_res = ctrl[, Y_pre[-1]]
+    Y_res = apply(Y_res, 1, mean)
+    
+    est_sig_pre = var(ctrl[, Y_pre[1]] - Y_res)/(1 + 1/(t-1))
+    
+    emp_cov = cov(ctrl[, Y_pre[1]] , ctrl[, Y_post])
+    v_t = var(ctrl[, Y_pre[1]])
+    
+    est_beta_theta_pre = sqrt(v_t - est_sig_pre)
+    est_beta_theta_post = emp_cov/est_beta_theta_pre
+    
+    est_Delta_theta = est_beta_theta_post - est_beta_theta_pre
+    
+    ratio = est_beta_theta_pre/est_beta_theta_post; ratio
+    
+    r_theta = t*est_beta_theta_pre^2/(t*est_beta_theta_pre^2 + est_sig_pre)
+    
+    # checking condition in Guideline (result for second row second column of Table 1)
+    condition = r_theta >= 1 - abs(1 - ratio)
+    
+    est_delta_theta = (mean(data[, Y_pre[1]][data$treatment == 1]) - mean(data[, Y_pre[1]][data$treatment == 0]))/est_beta_theta_pre
+    
+    est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
+    
+    result = data.frame(est_sig_pre, est_beta_theta_pre, est_beta_theta_post, 
+                        est_Delta_theta, ratio, r_theta, est_delta_theta, est_tau_xy)
+    return(result)
 }
 
 
 K = 1000
 
-beta_theta_1 = 1.5; beta_theta_0 = c(1, 0.75, 0.50); mu_theta_1 = 2; mu_theta_0 = 1; sig_theta = 1; sigma_pre = 1.3; sigma_post = 1; p = 0.2; t = 3; N = 20000;
+beta_theta_1 = 1.5; beta_theta_0 = c(1, 0.75, 0.50); mu_theta_1 = 2; mu_theta_0 = 1
+sig_theta = 1; sigma_pre = 1.3; sigma_post = 1; p = 0.2; t = 3; N = 20000;
 
 # boundary
 #sigma_pre = 1.347 (the exact decision boundary point)
 sigma_pre_tests = c(1, 1.2, 1.25, 1.3, 1.33, 1.36, 1.4, 1.6, 1.7)
 
 
-### let's first calculate the theoretical biases under these scenarios using our formula in the paper ### (green line in Figure 3)
+### let's first calculate the theoretical biases under these scenarios
+### using our formula in the paper ### (green line in Figure 3)
 true_diffs = vector()
 bias_naive = vector()
 bias_match = vector()
 for (j in 1:length(sigma_pre_tests)) {
-  sigma_pre = sigma_pre_tests[j]
-  truth = c(sigma_pre^2, beta_theta_0[t], beta_theta_1, beta_theta_1 - mean(beta_theta_0), beta_theta_0/beta_theta_1, (t*beta_theta_0^2*sig_theta^2)/(t*beta_theta_0^2*sig_theta^2 + sigma_pre^2), mu_theta_1 - mu_theta_0)
-  d_t = mu_theta_1 - mu_theta_0
-  D_t = beta_theta_1 - mean(beta_theta_0)
-  
-  bias_naive_DiD = D_t*d_t
-  
-  
-  sigma_thetay = matrix(beta_theta_0*sig_theta^2, nrow = 1)
-  sigma_yy = matrix(c(beta_theta_0[1]^2*sig_theta^2 + sigma_pre^2, 
-                      beta_theta_0[1]*beta_theta_0[2]*sig_theta^2, 
-                      beta_theta_0[1]*beta_theta_0[3]*sig_theta^2,
-                      beta_theta_0[1]*beta_theta_0[2]*sig_theta^2,
-                      beta_theta_0[2]*beta_theta_0[2]*sig_theta^2 + sigma_pre^2, 
-                      beta_theta_0[2]*beta_theta_0[3]*sig_theta^2, 
-                      beta_theta_0[1]*beta_theta_0[3]*sig_theta^2,
-                      beta_theta_0[3]*beta_theta_0[2]*sig_theta^2,
-                      beta_theta_0[3]*beta_theta_0[3]*sig_theta^2 + sigma_pre^2), nrow = 3)
-  slopes = matrix(c(beta_theta_0*d_t), ncol = 1)
-  
-  bias_DiD_matchy = beta_theta_1*(d_t - as.numeric(sigma_thetay%*%solve(sigma_yy)%*%slopes))
-  
-  bias_naive[j] = abs(bias_naive_DiD)
-  bias_match[j] = abs(bias_DiD_matchy)
-  
-  true_diffs[j] = abs(bias_naive_DiD)- abs(bias_DiD_matchy)
+    sigma_pre = sigma_pre_tests[j]
+    truth = c(sigma_pre^2, 
+              beta_theta_0[t], beta_theta_1, beta_theta_1 - mean(beta_theta_0),
+              beta_theta_0/beta_theta_1, 
+              (t*beta_theta_0^2*sig_theta^2)/(t*beta_theta_0^2*sig_theta^2 + sigma_pre^2), 
+              mu_theta_1 - mu_theta_0)
+    d_t = mu_theta_1 - mu_theta_0
+    D_t = beta_theta_1 - mean(beta_theta_0)
+    
+    bias_naive_DiD = D_t*d_t
+    
+    
+    sigma_thetay = matrix(beta_theta_0*sig_theta^2, nrow = 1)
+    sigma_yy = matrix(c(beta_theta_0[1]^2*sig_theta^2 + sigma_pre^2, 
+                        beta_theta_0[1]*beta_theta_0[2]*sig_theta^2, 
+                        beta_theta_0[1]*beta_theta_0[3]*sig_theta^2,
+                        beta_theta_0[1]*beta_theta_0[2]*sig_theta^2,
+                        beta_theta_0[2]*beta_theta_0[2]*sig_theta^2 + sigma_pre^2, 
+                        beta_theta_0[2]*beta_theta_0[3]*sig_theta^2, 
+                        beta_theta_0[1]*beta_theta_0[3]*sig_theta^2,
+                        beta_theta_0[3]*beta_theta_0[2]*sig_theta^2,
+                        beta_theta_0[3]*beta_theta_0[3]*sig_theta^2 + sigma_pre^2), nrow = 3)
+    slopes = matrix(c(beta_theta_0*d_t), ncol = 1)
+    
+    bias_DiD_matchy = beta_theta_1*(d_t - as.numeric(sigma_thetay%*%solve(sigma_yy)%*%slopes))
+    
+    bias_naive[j] = abs(bias_naive_DiD)
+    bias_match[j] = abs(bias_DiD_matchy)
+    
+    true_diffs[j] = abs(bias_naive_DiD)- abs(bias_DiD_matchy)
 }
 
 
 ### this is actual empirically measured ones ### (blue line in Figure 3)
 correct_decision = a_tau_xy = a_est_beta0 = a_est_beta1 = a_est_delta_theta = a_est_sig_pre_sq = vector()
 for (j in 1:length(sigma_pre_tests)) {
-  sigma_pre= sigma_pre_tests[j]
-  match = tau_xy = est_beta0 = est_beta1 = est_delta_theta = est_sig_pre_sq = vector()
-  for (i in 1:K) {
-      df = make_data(N, seed = i, beta_theta_1, beta_theta_0, mu_theta_1, mu_theta_0, sig_theta, sigma_pre, sigma_post, p, t)
-      Y_pre = colnames(df)[4:(4+(t-1))]
-      Y_post = "Y_post"
-      treatment = "treatment"
-      result = DiD_matchy_guideline(Y_pre, Y_post, treatment, df)
-      match[i] = result$r_theta >= 1 - abs(1 - result$ratio)
-      tau_xy[i] = result$est_tau_xy 
-      est_beta0[i] = result$est_beta_theta_pre
-      est_beta1[i] = result$est_beta_theta_post
-      est_delta_theta[i] = result$est_delta_theta
-      est_sig_pre_sq[i] = result$est_sig_pre
-  }
-  correct_decision[j] = mean(match)
-  a_tau_xy[j] = mean(tau_xy)
-  a_est_beta0[j] = mean(est_beta0)
-  a_est_beta1[j] = mean(est_beta1)
-  a_est_delta_theta[j] = mean(est_delta_theta)
-  a_est_sig_pre_sq[j] = mean(est_sig_pre_sq)
-  a_tau_xy[j] = mean(tau_xy)
-
-  print(j)
+    sigma_pre= sigma_pre_tests[j]
+    match = tau_xy = est_beta0 = est_beta1 = est_delta_theta = est_sig_pre_sq = vector()
+    for (i in 1:K) {
+        df = make_data(N, seed = i, beta_theta_1, beta_theta_0, mu_theta_1, mu_theta_0,
+                       sig_theta, sigma_pre, sigma_post, p, t)
+        Y_pre = colnames(df)[4:(4+(t-1))]
+        Y_post = "Y_post"
+        treatment = "treatment"
+        result = DiD_matchy_guideline(Y_pre, Y_post, treatment, df)
+        match[i] = result$r_theta >= 1 - abs(1 - result$ratio)
+        tau_xy[i] = result$est_tau_xy 
+        est_beta0[i] = result$est_beta_theta_pre
+        est_beta1[i] = result$est_beta_theta_post
+        est_delta_theta[i] = result$est_delta_theta
+        est_sig_pre_sq[i] = result$est_sig_pre
+    }
+    correct_decision[j] = mean(match)
+    a_tau_xy[j] = mean(tau_xy)
+    a_est_beta0[j] = mean(est_beta0)
+    a_est_beta1[j] = mean(est_beta1)
+    a_est_delta_theta[j] = mean(est_delta_theta)
+    a_est_sig_pre_sq[j] = mean(est_sig_pre_sq)
+    a_tau_xy[j] = mean(tau_xy)
+    
+    print(j)
 }
 ```
 
@@ -181,12 +189,33 @@ plot_df = data.frame(sigma_pre = sigma_pre_tests^2, correct_decision, a_tau_xy, 
 save(plot_df, file = "~/Downloads/plot_df")
 
 # left panel of Figure 3
-plot_1 = ggplot(data = plot_df, aes(x = sigma_pre, y = correct_decision)) + geom_point(size = 2) + geom_line(size = 2) + xlab(TeX("$\\sigma_{E}^2$")) + ylab("Proportion Match") + geom_vline(xintercept=boundary,linetype= "dotted", size = 2, col = "red") +  theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"), plot.title = element_text(size = a2, face = "bold"), axis.title.x = element_text(vjust=-0.5))
+plot_1 = ggplot(data = plot_df, aes(x = sigma_pre, y = correct_decision)) + 
+    geom_point(size = 2) + 
+    geom_line(size = 2) + xlab(TeX("$\\sigma_{E}^2$")) + 
+    ylab("Proportion Match") + 
+    geom_vline(xintercept=boundary,linetype= "dotted", size = 2, col = "red") + 
+    theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"), 
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), axis.line = element_line(colour = "black"), 
+          plot.title = element_text(size = a2, face = "bold"), axis.title.x = element_text(vjust=-0.5))
 
-plot2_df = data.frame(sigma_pre = c(plot_df$sigma_pre, plot_df$sigma_pre), difference = c(plot_df$a_tau_xy, plot_df$true_diffs), group = factor(rep(c("Estimated Difference", "True Difference"), each = nrow(plot_df))))
+plot2_df = data.frame(sigma_pre = c(plot_df$sigma_pre, plot_df$sigma_pre),
+                      difference = c(plot_df$a_tau_xy, 
+                                     plot_df$true_diffs), 
+                      group = factor(rep(c("Estimated Difference", "True Difference"), each = nrow(plot_df))))
 
 # right panel of figure 3
-plot_2 = ggplot(data = plot2_df, aes(x = sigma_pre, y = difference, col = group)) + geom_point(size = 2) + geom_line(size = 2) + xlab(TeX("$\\sigma_{E}^2$")) + ylab("Bias of No Match - Bias of Match") + scale_color_manual(values = c("Blue", "Dark Green"))+ geom_vline(xintercept=boundary,linetype= "dotted", size = 2, col = "red") +  theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"), panel.grid.major = element_blank(), legend.position= "top", legend.title=element_blank(),legend.text=element_text(size=a1), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"), plot.title = element_text(size = a2, face = "bold"), axis.title.x = element_text(vjust=-0.5)) 
+plot_2 = ggplot(data = plot2_df, aes(x = sigma_pre, y = difference, col = group)) + 
+    geom_point(size = 2) + 
+    geom_line(size = 2) + xlab(TeX("$\\sigma_{E}^2$")) + 
+    ylab("Bias of No Match - Bias of Match") +
+    scale_color_manual(values = c("Blue", "Dark Green")) + 
+    geom_vline(xintercept=boundary,linetype= "dotted", size = 2, col = "red") +  
+    theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"), 
+          panel.grid.major = element_blank(), legend.position= "top", legend.title=element_blank(),
+          legend.text=element_text(size=a1), panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), axis.line = element_line(colour = "black"), 
+          plot.title = element_text(size = a2, face = "bold"), axis.title.x = element_text(vjust=-0.5)) 
 
 fig_3 = ggarrange(plot_1, plot_2, nrow = 1)
 

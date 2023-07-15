@@ -4,3 +4,6 @@
 .Ruserdata
 DiDMatching.Rproj
 .DS_Store
+Replication_folder/*.pdf
+Replication_folder/*.html
+junk/

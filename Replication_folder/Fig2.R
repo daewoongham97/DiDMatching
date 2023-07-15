@@ -1,4 +1,11 @@
-## plotting reliability and breakage in parallel trend relationship
+
+#
+# plotting reliability and breakage in parallel trend relationship
+#
+# Shows how different reliability is needed for different degrees of
+# parallel trend breakage.
+#
+
 library(ggplot2); library(latex2exp); library(gridExtra); library(ggpubr); library(dplyr)
 
 B = 100
@@ -33,6 +40,8 @@ a2 = 20
 s_p = 5
 
 fig_2 = ggplot(data = plot_df, aes(x = s, y = reliability, col = bools)) + geom_point(size = s_p) + xlab("Breakage in Parallel Trends (s)") + ylab("Reliability") + theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.title=element_blank(),legend.text=element_text(size=a1), plot.title = element_text(size = a2, face = "bold"), axis.title.x = element_text(vjust=-0.5), legend.position = "top") + scale_color_manual(values = c("chartreuse4", "Red"))
+
+fig_2
 
 ggsave(file="Figures/Fig2.pdf", fig_2,  width = 7, height = 5, device = "pdf")
 
