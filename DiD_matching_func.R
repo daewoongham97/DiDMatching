@@ -294,6 +294,7 @@ DiD_matching_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, gro
                    Delta = weighted.mean( Delta, w = n_tx ),
                    delta = weighted.mean( delta, w = n_tx ) )
 
+    agg$agg_match = as.numeric( agg_est$statistic[[1]] >= 1 - abs( 1 - agg_est$statistic[[2]] ) )
 
     if ( aggregate_only ) {
         list( result = agg, statistic = agg_est, delta = agg_delta )

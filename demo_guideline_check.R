@@ -24,6 +24,7 @@ df = make_data(N = 10000, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta
                sig_x = sig_x, sigma_pre = sigma_pre, sigma_post = sigma_post,
                p = p, rho = rho)
 
+# A hypothetical dataset!
 head( df )
 
 
@@ -59,6 +60,7 @@ res
 # (This can only be run since we generated synthetic data with known
 # truth, and known parameters.)
 
+source( "oracle_bias_calculators.R" )
 truth = calculate_truth( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
                          beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
                          mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
@@ -72,9 +74,9 @@ res$statistic$true = truth$params
 res$delta$true = truth$delta$delta
 
 
-res$result$per_off = res$result$bias_reduction / res$result$true
-res$statistic$per_off = res$statistic$statistic / res$statistic$true
-res$delta$per_off = res$delta$delta / res$delta$true
+res$result$per_off = 1 - res$result$bias_reduction / res$result$true
+res$statistic$per_off = 1 - res$statistic$statistic / res$statistic$true
+res$delta$per_off = 1 - res$delta$delta / res$delta$true
 res
 
 
@@ -82,7 +84,8 @@ res
 
 #### Demo of staggered adoption ####
 
-# For staggered adoption, we would have a set of schools with outcomes and treatment indicators such as:
+# For staggered adoption, we would have a set of schools with outcomes
+# and treatment indicators such as:
 
 school_A = tribble( ~ year, ~ treat, ~ outcome, ~ X,
                     2005, 0, 102, 5,
@@ -100,6 +103,7 @@ school_A = tribble( ~ year, ~ treat, ~ outcome, ~ X,
 
 # We first make some data of this form:
 
+set.seed( 20440 )
 library( tidyverse )
 source( here::here( "data_simulator.R" ) )
 beta_theta_1 = 1.5; beta_theta_0 = 1.0
@@ -119,16 +123,17 @@ df_long = make_data_long(N = 2000, span_years = 10, seed = 14,
                          p = p, rho = rho)
 
 # Looking at structure of a single unit over time
-filter( df_long, ID == 3 )
+filter( df_long, ID == 5 )
 table( df_long$treat, df_long$year )
 
-# This is what "stacked" data looks like; those years with no lags
-# have been dropped.  This method could be useful, but you can also
-# just have the DiD_matching_guideline_staggered() method do this for
-# you.
+
+# The following is what "stacked" data looks like; those years with no
+# lags have been dropped.  This method could be useful, but you can
+# also just have the DiD_matching_guideline_staggered() method do this
+# for you.
 df_stack = add_lagged_outcomes( df_long, ID = "ID", year = "year",
                                 outcome = "Y", n_lags = 4 )
-filter( df_stack, ID == 3 )
+filter( df_stack, ID == 5 )
 
 
 # Estimating whether to match based on the long-form data (you can
@@ -143,6 +148,8 @@ res_stg = DiD_matching_guideline_staggered( Y_post = "Y",
                                             add_lagged_outcomes = TRUE,
                                             n_lags = 4 )
 res_stg
+
+
 
 
 
