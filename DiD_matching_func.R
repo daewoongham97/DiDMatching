@@ -15,16 +15,23 @@
 aggregate_residual_calcs <- function( all_residuals, post_residuals ) {
 
     T = ncol(all_residuals)
+
+    # Calc sigma2_e with only last lagged time point
+    # (No longer used, see alternate, below.)
+    Y_res = apply( all_residuals[,-T], 1, mean )
+    est_sig_pre = var( all_residuals[,T] - Y_res ) * (T-1) / T
+
+    # Alternate: Calculate average sigma2_e
     tots = apply( all_residuals, 1, sum )
     vars <- map_dbl( 1:T, function( c ) {
-
-        dels = all_residuals[,c] - tots / (T-1)
+        dels = (1 + 1/(T-1))*all_residuals[,c] - tots / (T-1)
         var( dels )
     } )
     sigma2_e = mean( vars ) * (T-1)/T
+    stopifnot( abs( vars[[T]] *(T-1)/T - est_sig_pre ) < 0.00000001 )
 
-    var_raw = apply( all_residuals, 2, var )
-    beta2_pre = var_raw - sigma2_e
+    all_vts = apply( all_residuals, 2, var )
+    beta2_pre = all_vts - sigma2_e
     if ( any( beta2_pre < 0 ) ) {
         warning( "Negative estimated beta_theta coefficients", call. = FALSE )
     }
@@ -32,7 +39,8 @@ aggregate_residual_calcs <- function( all_residuals, post_residuals ) {
     r_theta = T * mean(beta2_pre) / (T*mean(beta2_pre) + sigma2_e)
 
     # Is this calculation the best way?
-    beta2_post_ests = apply( all_residuals, 2, cov, post_residuals )^2 / beta2_pre
+    emp_cov = apply( all_residuals, 2, cov, post_residuals )
+    beta2_post_ests = emp_cov^2 / beta2_pre
 
     list( sigma2_e = sigma2_e,
           est_beta_theta_pre = sqrt( mean( beta2_pre ) ),
@@ -142,15 +150,11 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
     # getting the new response based on the average of all the
     # pre-treatment (residualized) outcomes
     all_residuals = lapply(reg_x_pre, residuals)
-    post_residuals = residuals(reg_x_post)
+    stopifnot( ncol( all_residuals ) == length(Y_pre) )
     names( all_residuals ) = Y_pre
     all_residuals = do.call( cbind, all_residuals )
 
-    Y_res = apply( all_residuals[,-t], 1, mean )
-
-    emp_cov = cov(all_residuals[,t] , post_residuals )
-
-    v_t = var(all_residuals[,t])
+    post_residuals = residuals(reg_x_post)
 
     if ( is.null( r_theta ) ) {
         params <- aggregate_residual_calcs( all_residuals, post_residuals )
@@ -162,6 +166,8 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
         ratio = params$est_beta_theta_pre/params$est_beta_theta_post
         r_theta = params$r_theta
     } else {
+        emp_cov = cov(all_residuals[,t] , post_residuals )
+        v_t = var(all_residuals[,t])
 
         est_beta_theta_pre = sqrt(r_theta*v_t)
         est_beta_theta_post = emp_cov/est_beta_theta_pre

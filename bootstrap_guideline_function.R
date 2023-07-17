@@ -20,7 +20,7 @@ bootstrap_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group,
                                          aggregate_only = FALSE,
                                          n_lags = 5,
                                          B = 100,
-                                         silent = FALSE ) {
+                                         silent = TRUE ) {
 
 
 
@@ -62,7 +62,7 @@ bootstrap_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group,
 
     if ( !silent ) {
 
-      print_boot_result( res_all )
+        print_boot_result( res_all )
         return( invisible( res_all ) )
 
     } else {

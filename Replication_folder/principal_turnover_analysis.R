@@ -80,6 +80,10 @@ res_stg_full %>%
 
 
 
+
+
+
+
 #### Bootstrapping the result ####
 
 # To do bootstrap to get sensitivity on the estimated guidelines we
@@ -87,15 +91,35 @@ res_stg_full %>%
 source( here::here( "bootstrap_guideline_function.R" ) )
 
 ## bootstrap procedure
-res = bootstrap_guideline_staggered( Y_pre = pre_years,
-                                     Y_post = tx_year,
-                                     treatment = "treat",
-                                     id = "school_id",
-                                     group = "year",
-                                     X = c_vars,
-                                     data = dat,
-                                     B = 100 )
+res_boot = bootstrap_guideline_staggered( Y_pre = pre_years,
+                                          Y_post = tx_year,
+                                          treatment = "treat",
+                                          id = "school_id",
+                                          group = "year",
+                                          X = c_vars,
+                                          data = dat,
+                                          B = 100 )
 
+
+# This will print out info.  But the returned object.
+print_boot_result( res_boot )
+
+
+
+
+#### Simple pre-post analysis ####
+
+# We need to specify a reliability since we cannot estimate with only to periods.
+
+res_prepost = DiD_matching_guideline_staggered( Y_pre = "savg_math0",
+                                                Y_post = tx_year,
+                                                treatment = "treat",
+                                                group = "year",
+                                                X = c_vars,
+                                                data = dat,
+                                                r_theta = 0.90,
+                                                aggregate_only = TRUE )
+res_prepost
 
 
 
@@ -114,11 +138,11 @@ result = map( r_theta, ~ DiD_matching_guideline_staggered( Y_pre = pre_years,
                                                            aggregate_only = TRUE,
                                                            r_theta = . ) )
 result = transpose(result) %>%
-    as_tibble()
+    as_tibble() %>%
+    mutate( r_theta = r_theta )
 result
 
 result %>%
-    mutate( r_theta = r_theta ) %>%
     dplyr::select( -delta ) %>%
     unnest( result ) %>%
     filter( what != "X" ) %>%
@@ -129,6 +153,14 @@ result %>%
     mutate( agg_match = ifelse( r_theta >= (1 - abs(1-s) ), "yes", "no" ) )
 
 
+
+# NOTE/TODO: The r_theta=0.90 result matches the pre-post 0.90 result
+# from prior, for Ypre.  Is this what we want?
+res_prepost$result
+result$result[ result$r_theta == 0.90 ]
+
+res_prepost$delta
+result$delta[ result$r_theta == 0.90 ]
 
 
 
