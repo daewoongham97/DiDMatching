@@ -154,11 +154,11 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
         ratio = params$est_beta_theta_pre/params$est_beta_theta_post
         r_theta = params$r_theta
     } else {
-        emp_cov = cov(all_residuals[,t] , post_residuals )
-        v_t = var(all_residuals[,t])
+        v_t = var(all_residuals[, t])
+        sigma2_e = v_t*(1 - r_theta)
 
-        est_beta_theta_pre = sqrt(r_theta*v_t)
-        est_beta_theta_post = emp_cov/est_beta_theta_pre
+        est_beta_theta_pre = sqrt(v_t - sigma2_e)
+        est_beta_theta_post = sqrt(var(post_residuals) - sigma2_e)
         est_Delta_theta = est_beta_theta_post - est_beta_theta_pre
         ratio = est_beta_theta_pre/est_beta_theta_post
     }
