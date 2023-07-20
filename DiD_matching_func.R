@@ -168,12 +168,21 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
     condition = r_theta >= 1 - abs(1 - ratio)
 
     # estimated reduction in bias
-    predic_ctrl = predict(reg_x_pre[[t]], ctrl)
-    r1_ctrl = ctrl[[ Y_pre[t] ]] - predic_ctrl
-
-    predic_trt = predict(reg_x_pre[[t]], trt)
-    r1_trt = trt[[ Y_pre[t] ]] - predic_trt
-    est_delta_theta = (mean(r1_trt) - mean(r1_ctrl))/est_beta_theta_pre
+    r1_ctrl =  matrix(NA, nrow = nrow(ctrl), ncol = t)
+    r1_trt = matrix(NA, nrow = nrow(trt), ncol = t)
+    for (i in 1:t) {
+      predic_ctrl = predict(reg_x_pre[[i]], ctrl)
+      r1_ctrl[, i] = ctrl[[ Y_pre[i] ]] - predic_ctrl
+      
+      predic_trt = predict(reg_x_pre[[i]], trt)
+      r1_trt[, i] = trt[[ Y_pre[i] ]] - predic_trt
+      
+    }
+    
+    ctrl_mean_residuals = apply(r1_ctrl, 1, mean)
+    trt_mean_residuals = apply(r1_trt, 1, mean)
+    
+    est_delta_theta = (mean(trt_mean_residuals) - mean(ctrl_mean_residuals))/est_beta_theta_pre
 
     est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
 
