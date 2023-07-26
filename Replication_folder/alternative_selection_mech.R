@@ -9,19 +9,21 @@
 
 library(MatchIt)
 
-
+source( here::here( "data_simulator.R" ) )
 
 
 ### Data generating process ###
 
 
-make_data <- function( N,
+make_data_assign <- function( N,
                        sigma = 1,
                        mu_theta = -1,
                        mu_x = 0,
                        probit_shift = 0,
                        probit_coef = -0.5,
-                       no_resid = FALSE ) {
+                       assign_mech = c("lag", "no resid", "original") ) {
+
+    assign_mech = match.arg(assign_mech)
 
     theta = rnorm(N, mean = mu_theta)
     X = rnorm( N, mean = mu_x )
@@ -33,16 +35,46 @@ make_data <- function( N,
 
     trt = as.numeric(probit_shift + probit_coef*Y_pre + rnorm(N) < 0)
 
-    # If no_resid = true then just use theta and X.  So everything should align.
-    if ( no_resid  ) {
+    # If assign_mech = true then just use theta and X.  So everything should align.
+    if ( assign_mech == "no resid" ) {
         ev = rnorm( N, sd = sqrt(sigma) )
         trt =  as.numeric(probit_shift + probit_coef*(theta+X) + ev + rnorm(N) < 0)
     }
 
-    dd <- data.frame( theta = theta,
-                      Y_pre = Y_pre,
-                      Y_pre1 = Y_pre1,
-                      Y_post = Y_post, X = X, trt = trt )
+    dd = NA
+    if ( assign_mech == "original" ) {
+        # make data similar to target, but with original model so our
+        # guidelines are perfectly specified.
+        d_theta = mean( theta[trt==1] ) - mean( theta[trt==0] )
+        d_X = mean( X[trt==1] ) - mean( X[trt==0] )
+        ptx = mean( trt == 1 )
+        sig_theta = (var( theta[trt==1] ) + var( theta[trt==0] )) / 2
+        sig_x = (var( X[trt==1] ) + var( X[trt==0] )) / 2
+        sigma_pre = (var( e[ trt == 1 ] ) + var( e[ trt == 0 ] )) / 2
+
+        dd = make_data( N = N,
+                        beta_theta_1 = 1.5,
+                        beta_theta_0 = 1.0,
+                        beta_x_1 = 1.2,
+                        beta_x_0 = 1,
+                        mu_theta_1 = mu_theta + d_theta * (1-ptx),
+                        mu_theta_0 = mu_theta - d_theta * ptx,
+                        mu_x_1 = mu_x + d_X*(1-ptx),
+                        mu_x_0 = mu_x - d_X*ptx,
+                        sig_theta = sig_theta, sig_x = sig_x,
+                        sigma_pre = sigma_pre, sigma_post = sigma_pre, p = ptx,
+                        num_pre = 2, rho = 0 )
+        dd <- rename( dd,
+                      trt = treatment,
+                      Y_pre1 = Y_0,
+                      Y_pre = Y_1,
+                      Y_post = Y_2 )
+    } else {
+        dd <- data.frame( theta = theta,
+                          Y_pre = Y_pre,
+                          Y_pre1 = Y_pre1,
+                          Y_post = Y_post, X = X, trt = trt )
+    }
     rownames(dd) = 1:nrow(dd)
 
     dd
@@ -51,7 +83,14 @@ make_data <- function( N,
 
 if ( FALSE ) {
 
-    dat = make_data(N = 10000, probit_coef = -2, probit_shift = 2)
+    N = 10000
+    sigma = 1
+    mu_theta = -1
+    mu_x = 0
+    probit_shift = 0
+    probit_coef = -0.5
+
+    dat = make_data_assign(N = 10000, probit_coef = -2, probit_shift = 2)
     mean( dat$trt )
 
 }
@@ -69,7 +108,7 @@ if ( FALSE ) {
 
     test_result = rep( 0, K )
     for (i in 1:K) {
-        dat = make_data(N,
+        dat = make_data_assign(N,
                         mu_theta = mu_theta,
                         mu_x = mu_x,
                         probit_coef = probit_coef )
@@ -93,7 +132,7 @@ if ( FALSE ) {
 if ( FALSE ) {
 
     library(ggpubr)
-    dat = make_data( N = N, mu_theta = mu_theta,
+    dat = make_data_assign( N = N, mu_theta = mu_theta,
                      probit_coef = probit_coef, probit_shift = 2 )
     mean(dat$trt)
 
@@ -114,7 +153,7 @@ source( here::here( "DiD_matching_func.R" ) )
 
 if ( FALSE ) {
     N = 10000
-    dat = make_data( N )
+    dat = make_data_assign( N )
     head( dat )
 
     md = lm( Y_pre ~ X, data=dat )
@@ -144,11 +183,11 @@ if ( FALSE ) {
 #'
 #' The DGP generates 2 YPre values so we don't need to worry about
 #' estimating reliability to use the guideline.
-check_sigma <- function( sigma, no_resid ) {
+check_sigma <- function( sigma, assign_mech ) {
 
-    cat( "sigma:", sigma, "no_resid:", no_resid, "\n" )
+    cat( "sigma:", sigma, "assign_mech:", assign_mech, "\n" )
 
-    dat = make_data( N = N, sigma = sigma, probit_shift = 1, no_resid = no_resid )
+    dat = make_data_assign( N = N, sigma = sigma, probit_shift = 1, assign_mech = assign_mech )
 
 
     # Calculate the estimated rT_theta (reliability) for T=1 guideline
@@ -216,9 +255,9 @@ check_sigma <- function( sigma, no_resid ) {
                            abs(real_bias_X) - abs(real_bias) )
     fin$emp_match = fin$emp_reduction > 0
     fin$sigma = sigma
-    fin$no_resid = no_resid
+    fin$assign_mech = assign_mech
 
-    fin <- relocate( fin, sigma, no_resid, what, emp_bias,
+    fin <- relocate( fin, sigma, assign_mech, what, emp_bias,
                      bias_reduction, emp_reduction,
                      match, emp_match ) %>%
         dplyr::select(-n) %>%
@@ -239,11 +278,12 @@ K = 5
 sigma_E_2 = rep( seq( 0.3, 1.5, length.out = R ), each=K )
 N = 10000
 
-params = expand_grid( sigma = sigma_E_2, no_resid = c(TRUE, FALSE) )
+params = expand_grid( sigma = sigma_E_2,
+                      assign_mech = c( "original", "lag", "no resid" ) )
 params
 
 # Run the simulation
-res_full = map2_df( params$sigma, params$no_resid, check_sigma )
+res_full = map2_df( params$sigma, params$assign_mech, check_sigma )
 
 
 print( res_full, n = 100 )
@@ -265,14 +305,14 @@ qplot( nones$emp_bias, nones$guide_reduction) +
 
 
 # Looking at guideline recommendation vs whether bias is actually reduced
-table( guideline = res$guide_match, empirical = res$emp_match, what = res$what, no_resid = res$no_resid )
+table( guideline = res$guide_match, empirical = res$emp_match, what = res$what, assign_mech = res$assign_mech )
 
 
 # Looking at actual bias reduction vs. guideline estimated bias
 # reduction
 
 resL <- res %>%
-    dplyr::select( sigma, no_resid,
+    dplyr::select( sigma, assign_mech,
                    what, guide_reduction, emp_reduction, guide_match, emp_match, emp_bias ) %>%
     pivot_longer( cols = c( guide_reduction, emp_reduction, guide_match, emp_match ),
                   names_to = c("method", ".value"),
@@ -280,7 +320,7 @@ resL <- res %>%
                   values_to="reduction" )
 
 ggplot( resL, aes( sigma, reduction, col=method, group=method ) ) +
-    facet_grid( no_resid ~ what ) +
+    facet_grid( assign_mech ~ what ) +
     geom_jitter( width = 0.02, height=0 ) +
     geom_smooth( se=FALSE ) +
     geom_hline( yintercept = 0 ) +
@@ -289,7 +329,7 @@ ggplot( resL, aes( sigma, reduction, col=method, group=method ) ) +
 
 
 reslG <- resL %>%
-    group_by( sigma, no_resid, what, method ) %>%
+    group_by( sigma, assign_mech, what, method ) %>%
     summarise( emp_bias = mean( emp_bias ),
                reduction = mean( reduction ),
                match = mean( match ), .groups="drop" )
@@ -300,10 +340,12 @@ reslG <- resL %>%
 reslG %>%
     pivot_wider( names_from = method,
                  values_from = c(reduction, match ) ) %>%
-    arrange( no_resid, what, sigma ) %>%
-    relocate( no_resid, what, sigma ) %>%
+    arrange( assign_mech, what, sigma ) %>%
+    relocate( assign_mech, what, sigma ) %>%
     print( n = 100 )
 
+# NOTE: guide doesn't want to match when empirically we should for X &
+# Y_pre, even when our model is mostly correct.
 
 
 

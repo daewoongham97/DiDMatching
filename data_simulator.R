@@ -83,6 +83,15 @@ make_data = function(N,
     Y_post = 5 + beta_theta_1*theta + beta_x_1*X + rnorm(N, mean = 0,sd = sigma_post)
     df = data.frame(treatment = treatment, theta, X)
 
+    if (  num_pre > 1 ) {
+        if ( length( beta_theta_0 ) == 1 ) {
+        beta_theta_0 = rep( beta_theta_0, num_pre )
+        }
+        if ( length( beta_x_0 ) == 1 ) {
+            beta_x_0 = rep( beta_x_0, num_pre )
+        }
+    }
+
     for (i in 1:num_pre) {
         df = cbind(df, beta_theta_0[[i]]*theta + beta_x_0[[i]]*X + rnorm(N, mean = 0, sd = sigma_pre))
     }
