@@ -1,5 +1,5 @@
 ---
-title: "multiple time periods check"
+title: "Simulation to assess varying coefficients and guideline"
 output:
   pdf_document: default
   html_document: default
@@ -13,88 +13,29 @@ We actually conduct the matching analysis and compare it to the empirical to see
 In particular, this document produces Figure 3 and Table 2.
 
 
-```{r}
-library(MASS)
+**NOTE** This script conversion is incomplete.  It would be nice to update the oracle to implement the matrix math as given.
 
-# This is a 3 pre-period setting DGP generation.
-make_data = function(N, seed = NULL, beta_theta_1, beta_theta_0,
-                     mu_theta_1, mu_theta_0, 
-                     sig_theta = 1, sigma_pre = 1.3, sigma_post = 1, p = 0.2, t) {
-    if ( !is.null( seed ) ) {
-        set.seed(seed)
-    }
-    
-    treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
-    
-    N_T = sum(treatment == 1)
-    
-    treats = rnorm(N_T, mu_theta_1, sig_theta)
-    controls = rnorm(N - N_T, mu_theta_0, sig_theta)
-    
-    theta = rep(NA, N)
-    theta[treatment == 1] = treats
-    theta[treatment == 0] = controls
-    
-    Y_post = 2 + beta_theta_1*theta + rnorm(N, mean = 0, sd = sigma_post)
-    df = data.frame(Y_post = Y_post, treatment = treatment, theta = theta)
-    
-    for (i in 1:(t)) {
-        nm = paste0("Y_pre_",i-1)
-        df[ nm ] = beta_theta_0[i]*theta + rnorm(N, mean = 0, sd = sigma_pre)
-    }
-
-    return(df)
-}
-```
 
 ```{r}
-# this function basically repeats the guideline that we have in our github
-# I only use this function because I coded this almost a year ago and just kept it
-# but it is the same as what we are doing 
-DiD_matchy_guideline = function(Y_pre, Y_post, treatment, data) {
-    t = length(Y_pre)
-    # getting the new response based on the average of all the pre-treatment (residualized) outcomes
-    
-    ctrl = data[data$treatment ==0, ]
-    
-    Y_res = ctrl[, Y_pre[-1]]
-    Y_res = apply(Y_res, 1, mean)
-    
-    est_sig_pre = var(ctrl[, Y_pre[1]] - Y_res)/(1 + 1/(t-1))
-    
-    emp_cov = cov(ctrl[, Y_pre[1]] , ctrl[, Y_post])
-    v_t = var(ctrl[, Y_pre[1]])
-    
-    est_beta_theta_pre = sqrt(v_t - est_sig_pre)
-    est_beta_theta_post = emp_cov/est_beta_theta_pre
-    
-    est_Delta_theta = est_beta_theta_post - est_beta_theta_pre
-    
-    ratio = est_beta_theta_pre/est_beta_theta_post; ratio
-    
-    r_theta = t*est_beta_theta_pre^2/(t*est_beta_theta_pre^2 + est_sig_pre)
-    
-    # checking condition in Guideline (result for second row second column of Table 1)
-    condition = r_theta >= 1 - abs(1 - ratio)
-    
-    est_delta_theta = (mean(data[, Y_pre[1]][data$treatment == 1]) - mean(data[, Y_pre[1]][data$treatment == 0]))/est_beta_theta_pre
-    
-    est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
-    
-    result = data.frame(est_sig_pre, est_beta_theta_pre, est_beta_theta_post, 
-                        est_Delta_theta, ratio, r_theta, est_delta_theta, est_tau_xy)
-    return(result)
-}
-
-
+source( here::here( "data_simulator.R" ) )
+source( here::here( "DiD_matching_func.R" ) )
+source( here::here( "oracle_bias_calculators.R" ) )
 K = 1000
 
-beta_theta_1 = 1.5; beta_theta_0 = c(1, 0.75, 0.50); mu_theta_1 = 2; mu_theta_0 = 1
+beta_theta_1 = 1.5; beta_theta_0 = c(1, 0.75, 0.50)
+mu_theta_1 = 2; mu_theta_0 = 1
+mu_x_1 = 3
+mu_x_0 = 1.5
+beta_x_1 = 0.9
+beta_x_0 = c( 1.2, 0.8, 1.0 )
+sig_x = 1
 sig_theta = 1; sigma_pre = 1.3; sigma_post = 1; p = 0.2; t = 3; N = 20000;
+rho = 0.5
 
 # boundary
 #sigma_pre = 1.347 (the exact decision boundary point)
 sigma_pre_tests = c(1, 1.2, 1.25, 1.3, 1.33, 1.36, 1.4, 1.6, 1.7)
+
 
 
 ### let's first calculate the theoretical biases under these scenarios
@@ -103,6 +44,19 @@ true_diffs = vector()
 bias_naive = vector()
 bias_match = vector()
 for (j in 1:length(sigma_pre_tests)) {
+    
+    biases = calculate_truth_varying( beta_theta_1, beta_theta_0,
+                             beta_x_1, beta_x_0,
+                             mu_theta_1, mu_theta_0,
+                             mu_x_1, mu_x_0,
+                             sig_theta = sig_theta, sig_x = sig_x,
+                             sigma_pre = sigma_pre_tests[[j]], 
+                             sigma_post = sigma_post,
+                             p = p, num_pre = t, rho = rho )
+        
+
+        
+        
     sigma_pre = sigma_pre_tests[j]
     truth = c(sigma_pre^2, 
               beta_theta_0[t], beta_theta_1, beta_theta_1 - mean(beta_theta_0),

@@ -101,7 +101,7 @@ res_boot = bootstrap_guideline_staggered( Y_pre = pre_years,
                                           B = 100 )
 
 
-# This will print out info.  But the returned object.
+# This will print out info from the returned object.
 print_boot_result( res_boot )
 
 
@@ -109,7 +109,13 @@ print_boot_result( res_boot )
 
 #### Simple pre-post analysis ####
 
+# For this we pretend we do not have multiple pre-treatment outcomes
+# and we only match on a single one.
+
 # We need to specify a reliability since we cannot estimate with only to periods.
+
+# What is the likely r theta for a single time point?
+calc_r_theta( 0.9, 6 )
 
 res_prepost = DiD_matching_guideline_staggered( Y_pre = "savg_math0",
                                                 Y_post = tx_year,
@@ -117,9 +123,12 @@ res_prepost = DiD_matching_guideline_staggered( Y_pre = "savg_math0",
                                                 group = "year",
                                                 X = c_vars,
                                                 data = dat,
-                                                r_theta = 0.90,
+                                                rT_theta = 0.60,
                                                 aggregate_only = TRUE )
 res_prepost
+
+# Matching is a bad idea for a single time point--we have too much
+# measurement error.
 
 
 
@@ -127,7 +136,7 @@ res_prepost
 
 
 # Do sensitivity analysis where we set r_theta
-r_theta = c(0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.875, 0.9, 0.95)
+rT_theta = c(0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.875, 0.9, 0.95)
 
 result = map( r_theta, ~ DiD_matching_guideline_staggered( Y_pre = pre_years,
                                                            Y_post = tx_year,
@@ -136,7 +145,7 @@ result = map( r_theta, ~ DiD_matching_guideline_staggered( Y_pre = pre_years,
                                                            X = c_vars,
                                                            data = dat,
                                                            aggregate_only = TRUE,
-                                                           r_theta = . ) )
+                                                           rT_theta = . ) )
 result = transpose(result) %>%
     as_tibble() %>%
     mutate( r_theta = r_theta )
@@ -152,15 +161,8 @@ result %>%
     relocate( r_theta ) %>%
     mutate( agg_match = ifelse( r_theta >= (1 - abs(1-s) ), "yes", "no" ) )
 
-
-
-# NOTE/TODO: The r_theta=0.90 result matches the pre-post 0.90 result
-# from prior, for Ypre.  Is this what we want?
-res_prepost$result
-result$result[ result$r_theta == 0.90 ]
-
-res_prepost$delta
-result$delta[ result$r_theta == 0.90 ]
+# Only under very high reliability should we match--it looks like our
+# conditional parallel trends is basically good.
 
 
 
@@ -174,12 +176,17 @@ if ( FALSE ) {
     # estimators. Used only for illustrative purposes.
 
     ## Naive DiD Estimates
+    trt = filter( dat, treat == 1 )
+    ctrl = filter( dat, treat == 0 )
+    final_df = as.data.frame(dat)
+
     (mean(trt$savg_math) - mean(ctrl$savg_math) ) - (mean(trt$savg_math0) - mean(ctrl$savg_math0) )
 
     ## DiD Estimates while matching on X
     library(MatchIt)
     rownames(final_df) = 1:nrow(final_df)
-    matching = matchit(treat ~ ssize_1000 + savg_frpl0 + savg_hisp0 + savg_black0 + prop_new + principal_yrs + principal_transition, data = final_df)
+    matching = matchit(treat ~ ssize_1000 + savg_frpl0 + savg_hisp0 + savg_black0 + prop_new + principal_yrs + principal_transition,
+                       data = final_df)
 
     matched_controls = final_df[as.numeric(matching$match.matrix), ]
 

@@ -9,108 +9,348 @@
 
 library(MatchIt)
 
-N = 100000
-mu_theta = mu_x = 2
-probit_coef = -0.5
 
-### this part does the shapiro-wilkson test for normality ###
-K = 1000
-test_result = vector()
-for (i in 1:K) {
-  theta = rnorm(N, mean = mu_theta)
-  X = rnorm(N, mean = mu_x)
 
-  Y = theta + X + rnorm(N, sd = sqrt(0.5))
 
-  trt = as.numeric(probit_coef*Y + rnorm(N) > 0)
+### Data generating process ###
 
-  trt_theta = theta[trt == 1]
 
-  test_result[i] = shapiro.test(trt_theta[1:5000])$p.value
-  print(i)
+make_data <- function( N,
+                       sigma = 1,
+                       mu_theta = -1,
+                       mu_x = 0,
+                       probit_shift = 0,
+                       probit_coef = -0.5,
+                       no_resid = FALSE ) {
+
+    theta = rnorm(N, mean = mu_theta)
+    X = rnorm( N, mean = mu_x )
+
+    e = rnorm(N, sd = sqrt(sigma))
+    Y_pre = theta + X + e
+    Y_pre1 = theta + X + rnorm( N, sd = sqrt(sigma) )
+    Y_post = 1.5*theta + 1.2*X + rnorm(N, sd = sqrt(0.01))
+
+    trt = as.numeric(probit_shift + probit_coef*Y_pre + rnorm(N) < 0)
+
+    # If no_resid = true then just use theta and X.  So everything should align.
+    if ( no_resid  ) {
+        ev = rnorm( N, sd = sqrt(sigma) )
+        trt =  as.numeric(probit_shift + probit_coef*(theta+X) + ev + rnorm(N) < 0)
+    }
+
+    dd <- data.frame( theta = theta,
+                      Y_pre = Y_pre,
+                      Y_pre1 = Y_pre1,
+                      Y_post = Y_post, X = X, trt = trt )
+    rownames(dd) = 1:nrow(dd)
+
+    dd
 }
 
-mean(test_result <= 0.05)
-# 0.045
+
+if ( FALSE ) {
+
+    dat = make_data(N = 10000, probit_coef = -2, probit_shift = 2)
+    mean( dat$trt )
+
+}
+
+
+### this part does the shapiro-wilkson test for normality ###
+
+if ( FALSE ) {
+
+    K = 1000
+    N = 10000
+    mu_theta = mu_x = 2
+    probit_coef = -0.5
+
+
+    test_result = rep( 0, K )
+    for (i in 1:K) {
+        dat = make_data(N,
+                        mu_theta = mu_theta,
+                        mu_x = mu_x,
+                        probit_coef = probit_coef )
+
+        trt_theta = dat$theta[dat$trt == 1]
+        if ( length( trt_theta ) > 5000 ) {
+            trt_theta = trt_theta[1:5000]
+        }
+        test_result[i] = shapiro.test(trt_theta)$p.value
+    }
+
+    mean(test_result <= 0.05)
+    # 0.045
+
+}
+
 
 
 ### This part produces Figure 1 in response to reviewer document ###
-library(ggpubr)
-a = ggqqplot(theta[trt == 1], title = "theta (treatment)")
 
-b = ggqqplot(theta[trt == 0], title = "theta (control)")
-c = ggqqplot(X[trt == 1], title = "X (treatment)")
-d = ggqqplot(X[trt == 0], title = "X (control)")
+if ( FALSE ) {
 
-ggarrange(a, b, c, d, nrow = 2, ncol = 2)
+    library(ggpubr)
+    dat = make_data( N = N, mu_theta = mu_theta,
+                     probit_coef = probit_coef, probit_shift = 2 )
+    mean(dat$trt)
+
+    a = ggqqplot(dat$theta[dat$trt == 1], title = "theta (treatment)")
+
+    b = ggqqplot(dat$theta[dat$trt == 0], title = "theta (control)")
+    c = ggqqplot(dat$X[dat$trt == 1], title = "X (treatment)")
+    d = ggqqplot(dat$X[dat$trt == 0], title = "X (control)")
+
+    ggarrange(a, b, c, d, nrow = 2, ncol = 2)
+}
 
 
 ### this part produces Figure 2 in the response to reviewer document ###
-N = 10000
-mu_theta = -1
-probit_coef = -0.5
-sigma_E_2 = c(0.3, 0.9, 1.2, 1.5)
-e_naive_DiD = e_DiD_match_both = vector()
-o_naive_DiD = o_DiD_match_both = vector()
 
-for (i in 1:length(sigma_E_2)) {
+source( here::here( "DiD_matching_func.R" ) )
 
-  sigma = sigma_E_2[i]
-  theta = rnorm(N, mean = mu_theta)
-  #X = rnorm(N, mean = mu_x)
-  e = rnorm(N, sd = sqrt(sigma))
-  Y_pre = theta + e
-  Y_post = 1.5*theta + rnorm(N, sd = sqrt(0.01))
 
-  trt = as.numeric(probit_coef*Y_pre + rnorm(N) < 0)
+if ( FALSE ) {
+    N = 10000
+    dat = make_data( N )
+    head( dat )
 
-  trt_theta = theta[trt == 1]
-  ctrl_theta = theta[trt == 0]
-  # population parameter estimates
-  sigma_theta = var(trt_theta) # conditional variance of theta (using from treatment)
-  d_theta = mean(trt_theta) - mean(ctrl_theta) # confoundness
+    md = lm( Y_pre ~ X, data=dat )
+    rT_theta = var( dat$theta ) / var( resid( md ) )
+    rT_theta
 
-  ## naive DiD bias calculation (omitted from figure but I did it anyways)
-  # calculating expected bias from formula is just (1.5 - 1.0)*d_theta
-  e_naive_DiD[i] = 0.5*(d_theta)
-  # observed naive DiD bias is simply just taking the empirical DiD
-  o_naive_DiD[i] = (mean(Y_post[trt == 1]) - mean(Y_post[trt == 0])) -
-    (mean(Y_pre[trt == 1]) - mean(Y_pre[trt == 0]))
+    rec <- DiD_matching_guideline( "Y_pre", "Y_post", treatment = "trt", X = "X",
+                                   data=dat,
+                                   rT_theta = rT_theta )
+    rec$result
 
-  ## matching on Y DiD
-  # first calculate the theoretical bias is reliability * beta_theta_post * d_theta
-  rel = sigma_theta/(sigma_theta + sigma)
-  e_DiD_match_both[i] = 1.5*((1 - rel)*d_theta)
-  # to calculate empirical bias simply just match
-  final_df = data.frame(Y_pre, Y_post, trt)
-  rownames(final_df) = 1:nrow(final_df)
-  matching = matchit(trt ~ Y_pre, data = final_df)
-  matched_controls = final_df[as.numeric(matching$match.matrix), ]
-  o_DiD_match_both[i] = (mean(Y_post[trt == 1]) - mean(matched_controls$Y_post)) - (mean(Y_pre[trt == 1]) -  mean(matched_controls$Y_pre))
+
+    rec <- DiD_matching_guideline( Y_pre= c( "Y_pre", "Y_pre1" ),
+                                   Y_post = "Y_post", treatment = "trt", X = "X",
+                                   data=dat )
+    rec
 }
 
-library(ggplot2); library(latex2exp)
 
-#plotting figs
-s = 5
-w = 50
-s2 = 5
-a1 = 15
-a2 = 20
-plot_df = data.frame(sigma_E = c(sigma_E_2, sigma_E_2), naive_DiD = c(e_naive_DiD, o_naive_DiD), match_DiD = abs(c(e_DiD_match_both, o_DiD_match_both)),
-                     group = factor(rep(c("Theoretical", "Observed"), each = length(sigma_E_2))))
-plot = ggplot(data = plot_df, aes(x = sigma_E, y = match_DiD, col = group)) + geom_line(size = 2) + xlab(TeX("$\\sigma_E^2$")) + ylab("Absolute Bias of Matched DiD") + ggtitle("Alternative Selection Mechanism") + theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"),
-                                                                                                                                                                                                                           panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(),
-                                                                                                                                                                                                                           axis.line = element_line(colour = "black"), legend.position= "top", legend.title=element_blank(),
-                                                                                                                                                                                                                           legend.text=element_text(size=a1), plot.title = element_text(size = a2, face = "bold"),
-                                                                                                                                                                                                                           axis.title.x = element_text(vjust=-0.5))
-pdf(file = "~/Downloads/alt_selection_fig.pdf",
-    width = 8,
-    height = 6)
 
-plot
+#' This function generates a dataset and then calculates the empirical
+#' bias and the bias from the guideline formula, so they can be
+#' compared.
+#'
+#' It returns a table of results, one row for naive (doing nothing),
+#' one row for matching on X, and one row for matching on X and YPre.
+#'
+#' The DGP generates 2 YPre values so we don't need to worry about
+#' estimating reliability to use the guideline.
+check_sigma <- function( sigma, no_resid ) {
 
-dev.off()
+    cat( "sigma:", sigma, "no_resid:", no_resid, "\n" )
+
+    dat = make_data( N = N, sigma = sigma, probit_shift = 1, no_resid = no_resid )
+
+
+    # Calculate the estimated rT_theta (reliability) for T=1 guideline
+    #md = lm( Y_pre ~ X, data=dat )
+    #rel = var( dat$theta ) / var( resid( md ) )
+
+    #e_DiD_match_both[i] = 1.5*((1 - rel)*d_theta)
+    rec <- DiD_matching_guideline( Y_pre = c( "Y_pre", "Y_pre1" ), Y_post = "Y_post",
+                                   treatment = "trt", X = "X",
+                                   data=dat ) # rT_theta = rel )
+    rec$result
+
+
+    ## population parameter estimates
+    trt_theta = dat$theta[dat$trt == 1]
+    ctrl_theta = dat$theta[dat$trt == 0]
+    sigma_theta = var(trt_theta) # conditional variance of theta (using from treatment)
+    d_theta = mean(trt_theta) - mean(ctrl_theta) # degree of confoundness
+
+    ## naive DiD bias calculation (omitted from figure but I did it anyways)
+    # calculating expected bias from formula is just (1.5 - 1.0)*d_theta
+    e_naive_DiD = 0.5*(d_theta)
+
+    # observed naive DiD bias is simply the empirical DiD
+    real_bias_naive = with( dat,
+                            (mean(Y_post[trt == 1]) - mean(Y_post[trt == 0])) -
+                                (mean(Y_pre[trt == 1]) - mean(Y_pre[trt == 0])) )
+
+
+    ## Matching on X
+    # We calculate empirical bias by simply matching
+    matching = matchit(trt ~ X, data = dat)
+    matched_controls = dat[as.numeric(matching$match.matrix), ]
+    txed = filter( dat, trt == 1 )
+    real_bias_X = (mean( txed$Y_post ) - mean(matched_controls$Y_post) ) -
+        ( mean(txed$Y_pre) - mean(matched_controls$Y_pre) )
+
+
+    ## Matching on X and YPre
+    matching = matchit(trt ~ Y_pre + Y_pre1 + X, data = dat)
+    matched_controls = dat[as.numeric(matching$match.matrix), ]
+    txed = filter( dat, trt == 1 )
+    real_bias = (mean( txed$Y_post ) - mean(matched_controls$Y_post) ) -
+        ( mean(txed$Y_pre) - mean(matched_controls$Y_pre) )
+
+
+    ## Assemble results
+    fin = rec$result
+    fin$emp_bias = c( real_bias_X, real_bias )
+
+    # Make a set of results for baseline naive results
+    # NOTE: bias_reduction is the estimated bias (not reduction)
+    tb = tibble( what = "none", match = NA,
+                 bias_reduction = e_naive_DiD,
+                 emp_bias = real_bias_naive,
+                 n = nrow(dat),
+                 n_tx = length(trt_theta) )
+    fin = bind_rows(tb, fin)
+
+    fin$delta_theta = d_theta / sigma_theta
+
+    # calculate empirical bias reductions
+    fin$emp_reduction = c( 0,
+                           abs(real_bias_naive) - abs(real_bias_X),
+                           abs(real_bias_X) - abs(real_bias) )
+    fin$emp_match = fin$emp_reduction > 0
+    fin$sigma = sigma
+    fin$no_resid = no_resid
+
+    fin <- relocate( fin, sigma, no_resid, what, emp_bias,
+                     bias_reduction, emp_reduction,
+                     match, emp_match ) %>%
+        dplyr::select(-n) %>%
+        rename( guide_reduction = bias_reduction,
+                guide_match = match )
+
+    fin
+}
+
+
+if ( FALSE ) {
+    check_sigma( 1, TRUE )
+}
+
+
+R = 5
+K = 5
+sigma_E_2 = rep( seq( 0.3, 1.5, length.out = R ), each=K )
+N = 10000
+
+params = expand_grid( sigma = sigma_E_2, no_resid = c(TRUE, FALSE) )
+params
+
+# Run the simulation
+res_full = map2_df( params$sigma, params$no_resid, check_sigma )
+
+
+print( res_full, n = 100 )
+
+
+nones <- filter( res_full, what == "none" )
+nones
+
+res = filter( res_full, what != "none" )
+
+theme_set( theme_minimal() )
+
+
+# the bias of no matching vs. the theoretical bias
+# It is not looking good.  The guideline formula is incorrect here.
+qplot( nones$emp_bias, nones$guide_reduction) +
+    geom_abline( intercept = 0, slope=1 ) +
+    coord_fixed()
+
+
+# Looking at guideline recommendation vs whether bias is actually reduced
+table( guideline = res$guide_match, empirical = res$emp_match, what = res$what, no_resid = res$no_resid )
+
+
+# Looking at actual bias reduction vs. guideline estimated bias
+# reduction
+
+resL <- res %>%
+    dplyr::select( sigma, no_resid,
+                   what, guide_reduction, emp_reduction, guide_match, emp_match, emp_bias ) %>%
+    pivot_longer( cols = c( guide_reduction, emp_reduction, guide_match, emp_match ),
+                  names_to = c("method", ".value"),
+                  names_pattern = '(.*)_(.*)',
+                  values_to="reduction" )
+
+ggplot( resL, aes( sigma, reduction, col=method, group=method ) ) +
+    facet_grid( no_resid ~ what ) +
+    geom_jitter( width = 0.02, height=0 ) +
+    geom_smooth( se=FALSE ) +
+    geom_hline( yintercept = 0 ) +
+    theme_minimal() +
+    labs( y = "Bias Reduction" )
+
+
+reslG <- resL %>%
+    group_by( sigma, no_resid, what, method ) %>%
+    summarise( emp_bias = mean( emp_bias ),
+               reduction = mean( reduction ),
+               match = mean( match ), .groups="drop" )
+
+
+# Look at alignment of matching according to guide vs actually whether
+# we should match.
+reslG %>%
+    pivot_wider( names_from = method,
+                 values_from = c(reduction, match ) ) %>%
+    arrange( no_resid, what, sigma ) %>%
+    relocate( no_resid, what, sigma ) %>%
+    print( n = 100 )
+
+
+
+
+#### Make the final figure ####
+
+if ( FALSE ) {
+
+    # NOTE: Would need to be updated.
+
+    library(ggplot2)
+    library(latex2exp)
+
+    #plotting figs
+    s = 5
+    w = 50
+    s2 = 5
+    a1 = 15
+    a2 = 20
+
+    plot_df = data.frame(sigma_E = c(sigma_E_2, sigma_E_2),
+                         naive_DiD = c(e_naive_DiD, o_naive_DiD),
+                         match_DiD = abs(c(e_DiD_match_both, o_DiD_match_both)),
+                         group = factor(rep(c("Theoretical", "Observed"),
+                                            each = length(sigma_E_2))))
+
+    plot = ggplot(data = plot_df, aes(x = sigma_E, y = match_DiD, col = group)) +
+        geom_line(size = 2) + xlab(TeX("$\\sigma_E^2$")) +
+        ylab("Absolute Bias of Matched DiD") +
+        ggtitle("Alternative Selection Mechanism") +
+        theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"),
+              panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+              panel.background = element_blank(),
+              axis.line = element_line(colour = "black"), legend.position= "top",
+              legend.title=element_blank(),
+              legend.text=element_text(size=a1),
+              plot.title = element_text(size = a2, face = "bold"),
+              axis.title.x = element_text(vjust=-0.5))
+
+    pdf(file = "~/Downloads/alt_selection_fig.pdf",
+        width = 8,
+        height = 6)
+
+    print( plot )
+
+    dev.off()
+
+}
 
 
 

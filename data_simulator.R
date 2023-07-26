@@ -12,11 +12,11 @@ library(devtools)
 #'
 #' @param N Total sample size
 #' @param beta_theta_1 Post-slope for theta
-#' @param beta_theta_0 Pre-slope for theta (assumed to be the same for
-#'   all pre-treatment periods)
+#' @param beta_theta_0 Pre-slope for theta (can be a vector of length
+#'   T for varying theta).
 #' @param beta_x_1 Post-slope for X
-#' @param beta_x_0 Pre-slope for X (assumed to be the same for all
-#'   pre-treatment periods)
+#' @param beta_x_0 Pre-slope for X (can be a vector of length T for
+#'   varying X coefficients).
 #' @param mu_theta_1 Mean of theta among treated
 #' @param mu_theta_0 Mean of theta among control
 #' @param mu_x_1 Mean of X among treated
@@ -84,7 +84,7 @@ make_data = function(N,
     df = data.frame(treatment = treatment, theta, X)
 
     for (i in 1:num_pre) {
-        df = cbind(df, beta_theta_0*theta + beta_x_0*X + rnorm(N, mean = 0, sd = sigma_pre))
+        df = cbind(df, beta_theta_0[[i]]*theta + beta_x_0[[i]]*X + rnorm(N, mean = 0, sd = sigma_pre))
     }
     name_v = paste0( "Y_", 0:num_pre )
     df = cbind( df, Y_post )

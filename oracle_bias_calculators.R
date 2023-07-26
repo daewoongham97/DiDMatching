@@ -6,17 +6,29 @@
 
 
 
-#' Calculate true values of bias, etc., for given model
+#' Calculate true values of bias, etc., for given model with single x
+#' and theta.
 #'
-#' (This can only be run since we generated synthetic data with known truth)
+#' (This can only be run since we generated synthetic data with known
+#' truth)
 #'
 calculate_truth <- function( beta_theta_1, beta_theta_0,
-                             beta_x_1, beta_x_0,
-                             mu_theta_1, mu_theta_0,
-                             mu_x_1, mu_x_0,
-                             sig_theta = 1, sig_x = 1,
-                             sigma_pre = 1.3, sigma_post = 0.01,
-                             p = 0.2, num_pre = 5, rho = 0.5 ) {
+                                beta_x_1, beta_x_0,
+                                mu_theta_1, mu_theta_0,
+                                mu_x_1, mu_x_0,
+                                sig_theta = 1, sig_x = 1,
+                                sigma_pre = 1.3, sigma_post = 0.01,
+                                p = 0.2, num_pre = 5, rho = 0.5 ) {
+
+
+    Delta_theta = beta_theta_1 - mean( beta_theta_0 )
+    delta_theta = mu_theta_1 - mu_theta_0
+
+    Delta_X = beta_x_1 - mean( beta_x_0 )
+    delta_x = mu_x_1 - mu_x_0
+
+    bias_DiD =  Delta_theta * delta_theta +  delta_x * Delta_X
+     #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
 
 
     # True Imbalance of Theta
@@ -53,8 +65,72 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
 
     ## Add true values to compare to original estimates to ease comparison
 
-    biases = c( abs(bias_X - bias_naive),
-                abs(bias_Y - bias_X) )
+    biases = c( X = abs(bias_X - bias_naive),
+                `X & Ypre` = abs(bias_Y - bias_X) )
+
+    Delta_theta = beta_theta_post - beta_theta_pre
+
+    delta = tribble( ~ quantity, ~beta_pre, ~beta_post, ~Delta, ~delta,
+                     "X",  NA, NA, NA, delta_x,
+                     "theta (~)", beta_theta_pre, beta_theta_post, Delta_theta, tilde_delta_theta  )
+
+    param = c( r = r,
+               s = beta_theta_post / beta_theta_pre )
+
+    list( biases = biases, params = param, delta = delta )
+
+}
+
+
+
+
+calculate_truth_v2 <- function( beta_theta_1, beta_theta_0,
+                             beta_x_1, beta_x_0,
+                             mu_theta_1, mu_theta_0,
+                             mu_x_1, mu_x_0,
+                             sig_theta = 1, sig_x = 1,
+                             sigma_pre = 1.3, sigma_post = 0.01,
+                             p = 0.2, num_pre = 5, rho = 0.5 ) {
+
+
+
+
+    # True Imbalance of Theta
+    tilde_delta_theta = (mu_theta_1 - mu_theta_0) - (rho*sig_theta*sig_x)/sig_x^2*(mu_x_1 - mu_x_0)
+    tilde_delta_theta
+
+
+    # True reduction in bias from matching on X
+    bias_naive = (beta_theta_1 - beta_theta_0)*(mu_theta_1 - mu_theta_0) +
+        (beta_x_1 - beta_x_0)*(mu_x_1 - mu_x_0)
+    bias_X = (beta_theta_1 - beta_theta_0)*(tilde_delta_theta)
+    bias_X
+    bias_naive
+
+    abs(bias_X - bias_naive)
+
+    # True reliability
+    tilde_sigma_theta = sig_theta^2 - (rho*sig_theta*sig_x)^2/sig_x^2
+    r = (num_pre*beta_theta_0^2*tilde_sigma_theta)/ ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma_pre^2)
+    r
+
+    # True reduction in bias from matching additionally on Y_pre
+    bias_Y = beta_theta_1*tilde_delta_theta*(1 - r)
+    abs(bias_Y - bias_X)
+
+
+    # True imbalance of X
+    delta_x = mu_x_1 - mu_x_0
+
+    # True expected pre/post slope
+    beta_theta_pre = beta_theta_0*tilde_sigma_theta
+    beta_theta_post = beta_theta_1*tilde_sigma_theta
+
+
+    ## Add true values to compare to original estimates to ease comparison
+
+    biases = c( X = abs(bias_X - bias_naive),
+                `X & Ypre` = abs(bias_Y - bias_X) )
 
     Delta_theta = beta_theta_post - beta_theta_pre
 
@@ -137,8 +213,11 @@ bias_match_both_truth_OLD = function(rho,
 
 
 # theom 5.2 bias
-bias_match_both_myestimator_OLD = function(rho, beta_theta_0, beta_x_0, beta_theta_1, beta_x_1, beta_z_1, beta_z_0,
-                                           mu_theta_1, mu_theta_0, mu_x_1, mu_x_0, mu_z_1, mu_z_0, sig_theta, sig_x, sig_z, sigma_pre, a = 0) {
+bias_match_both_myestimator_OLD = function(rho, beta_theta_0, beta_x_0, beta_theta_1,
+                                           beta_x_1, beta_z_1, beta_z_0,
+                                           mu_theta_1, mu_theta_0, mu_x_1, mu_x_0,
+                                           mu_z_1, mu_z_0,
+                                           sig_theta, sig_x, sig_z, sigma_pre, a = 0) {
     # cov matrix of X
     sigma_XX <- matrix(c(sig_x^2, a, a, sig_z^2),
                        2)

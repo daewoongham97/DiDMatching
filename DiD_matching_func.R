@@ -13,28 +13,65 @@
 #' guideline, averaging across the pre-treatment time periods to gain
 #' stability (and take into account non-parallel trends).
 aggregate_residual_calcs <- function( all_residuals, post_residuals ) {
-  
-  T = ncol(all_residuals)
-  
-  # Calc sigma2_e with only two lagged time point
-  sigma2_e = var( all_residuals[,T] - all_residuals[, T-1] ) /2
-  
-  
-  all_vts = apply( all_residuals, 2, var )
-  beta2_pre = all_vts - sigma2_e
-  if ( any( beta2_pre < 0 ) ) {
-    warning( "Negative estimated beta_theta coefficients", call. = FALSE )
-  }
-  
-  r_theta = T * mean(beta2_pre) / (T*mean(beta2_pre) + sigma2_e)
-  
-  beta2_post_ests = var(post_residuals) - sigma2_e
-  
-  list( sigma2_e = sigma2_e,
-        est_beta_theta_pre = sqrt( mean( beta2_pre ) ),
-        est_beta_theta_post = sqrt( beta2_post_ests ),
-        r_theta = r_theta )
+
+    T = ncol(all_residuals)
+
+    # Calc sigma2_e with only two lagged time point
+    sigma2_e = var( all_residuals[,T] - all_residuals[, T-1] ) /2
+
+
+    all_vts = apply( all_residuals, 2, var )
+    beta2_pre = all_vts - sigma2_e
+    if ( any( beta2_pre < 0 ) ) {
+        warning( "Negative estimated beta_theta coefficients", call. = FALSE )
+    }
+
+    rT_theta = T * mean(beta2_pre) / (T*mean(beta2_pre) + sigma2_e)
+
+    beta2_post_ests = var(post_residuals) - sigma2_e
+
+    list( sigma2_e = sigma2_e,
+          est_beta_theta_pre = sqrt( mean( beta2_pre ) ),
+          est_beta_theta_post = sqrt( beta2_post_ests ),
+          rT_theta = rT_theta )
 }
+
+
+#' Under stability assumptions, convert an overall rT_theta to the
+#' r_theta of a single timepoint.
+calc_r_theta <- function( rT_theta, T ) {
+    rT_theta / (T * (1-rT_theta) + rT_theta)
+}
+
+
+
+#' This function calculates the parameters for the "match on Ypre"
+#' guideline, when rT_theta has been specified.
+aggregate_residual_calcs_reliability <- function( all_residuals, post_residuals, rT_theta ) {
+
+    T = ncol(all_residuals)
+    r_theta = calc_r_theta( rT_theta, T )
+
+    all_vts = apply( all_residuals, 2, var )
+
+    sigma2_e = all_vts * (1-r_theta)
+
+    beta2_pre = all_vts * r_theta
+
+    if ( any( beta2_pre < 0 ) ) {
+        warning( "Negative estimated beta_theta coefficients", call. = FALSE )
+    }
+
+
+    beta2_post_ests = var(post_residuals) * r_theta
+
+    list( sigma2_e = sigma2_e,
+          est_beta_theta_pre = sqrt( mean( beta2_pre ) ),
+          est_beta_theta_post = sqrt( beta2_post_ests ),
+          rT_theta = rT_theta )
+}
+
+
 
 
 #' Code to run Guideline 1 and 2
@@ -56,17 +93,23 @@ aggregate_residual_calcs <- function( all_residuals, post_residuals ) {
 #'   contains the all observed variable(s) X
 #' @param data Dataframe that contains all Y_pre, Y_post, X, and
 #'   treatment
-#' @param r_theta If not null, take this as the conditional
-#'   reliability term rather than estimating it from the data (this
-#'   allows for a single pre-treatment outcome, notably).
+#' @param rT_theta If not null, take this as the conditional
+#'   reliability term for all information across all pre-treatment
+#'   outcomes.  Specify this rather than estimating it from the data
+#'   (this allows for a single pre-treatment outcome, notably).
 #' @return A list containing two tables, \item{result}{A two-row
 #'   dataframe containing results for matching on X and X and Y_pre.
 #'   Each row lists whether one should match (always TRUE for the X
 #'   row), and the estimated change in bias. \item{estimate}{An
 #'   additional table containing estimated parameters, e.g., estimated
 #'   reliability, estimated pre-slope, etc.}
-DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
-                                  r_theta = NULL ) {
+DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
+                                  rT_theta = NULL ) {
+
+    if ( is.null( X ) ) {
+        X = ".X"
+        data$.X = 1
+    }
 
     # simple checks
     col_names = colnames(data)
@@ -93,8 +136,8 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
     n_tx = nrow(trt)
     t = length(Y_pre)
 
-    if ( t == 1 && is.null( r_theta ) ) {
-        stop( "Cannot estimate guideline without specifying r_theta with single pre-treatment outcome" )
+    if ( t == 1 && is.null( rT_theta ) ) {
+        stop( "Cannot estimate guideline without specifying rT_theta with single pre-treatment outcome" )
     }
 
     ## Guideline 1) Estimating Delta_X
@@ -144,47 +187,43 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
 
     post_residuals = residuals(reg_x_post)
 
-    if ( is.null( r_theta ) ) {
+    params = NULL
+    if ( is.null( rT_theta ) ) {
         params <- aggregate_residual_calcs( all_residuals, post_residuals )
-
-        est_beta_theta_pre = params$est_beta_theta_pre
-        est_beta_theta_post = params$est_beta_theta_post
-
-        est_Delta_theta = params$est_beta_theta_post - params$est_beta_theta_pre
-        ratio = params$est_beta_theta_pre/params$est_beta_theta_post
-        r_theta = params$r_theta
     } else {
-        v_t = var(all_residuals[, t])
-        sigma2_e = v_t*(1 - r_theta)
-
-        est_beta_theta_pre = sqrt(v_t - sigma2_e)
-        est_beta_theta_post = sqrt(var(post_residuals) - sigma2_e)
-        est_Delta_theta = est_beta_theta_post - est_beta_theta_pre
-        ratio = est_beta_theta_pre/est_beta_theta_post
+        params <- aggregate_residual_calcs_reliability( all_residuals, post_residuals,
+                                                        rT_theta = rT_theta )
     }
+
+    est_beta_theta_pre = params$est_beta_theta_pre
+    est_beta_theta_post = params$est_beta_theta_post
+    est_Delta_theta = params$est_beta_theta_post - params$est_beta_theta_pre
+    s_ratio = params$est_beta_theta_pre/params$est_beta_theta_post
+    rT_theta = params$rT_theta
+
 
     # checking condition in Guideline (result for second row second
     # column of Table 1)
-    condition = r_theta >= 1 - abs(1 - ratio)
+    condition = rT_theta >= 1 - abs(1 - s_ratio)
 
     # estimated reduction in bias
     r1_ctrl =  matrix(NA, nrow = nrow(ctrl), ncol = t)
     r1_trt = matrix(NA, nrow = nrow(trt), ncol = t)
     for (i in 1:t) {
-      predic_ctrl = predict(reg_x_pre[[i]], ctrl)
-      r1_ctrl[, i] = ctrl[[ Y_pre[i] ]] - predic_ctrl
-      
-      predic_trt = predict(reg_x_pre[[i]], trt)
-      r1_trt[, i] = trt[[ Y_pre[i] ]] - predic_trt
-      
+        predic_ctrl = predict(reg_x_pre[[i]], ctrl)
+        r1_ctrl[, i] = ctrl[[ Y_pre[i] ]] - predic_ctrl
+
+        predic_trt = predict(reg_x_pre[[i]], trt)
+        r1_trt[, i] = trt[[ Y_pre[i] ]] - predic_trt
+
     }
-    
+
     ctrl_mean_residuals = apply(r1_ctrl, 1, mean)
     trt_mean_residuals = apply(r1_trt, 1, mean)
-    
+
     est_delta_theta = (mean(trt_mean_residuals) - mean(ctrl_mean_residuals))/est_beta_theta_pre
 
-    est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
+    est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - rT_theta))
 
 
     ## Pack up results
@@ -202,10 +241,10 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X, data,
     deltas = bind_rows( slopes, deltas )
 
     estimate_df = tribble( ~ quantity,         ~ statistic,
-                           "Reliability (rho)" , r_theta,
+                           "Reliability (rho)" , rT_theta,
                            #"pre-slope (beta_T-1)" , est_beta_theta_pre,
                            #"post-slope (beta_T)" , est_beta_theta_post,
-                           "s",                  est_beta_theta_pre / est_beta_theta_post,
+                           "s",                  s_ratio,
                            #"delta_theta (~)" , est_delta_theta,
                            #"Delta_theta (~)", est_beta_theta_post - est_beta_theta_pre )
     )
@@ -296,7 +335,7 @@ if ( FALSE ) {
 #'   TRUE.
 #'
 DiD_matching_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group, X, data,
-                                            r_theta = NULL,
+                                            rT_theta = NULL,
                                             add_lagged_outcomes = FALSE,
                                             aggregate_only = FALSE,
                                             n_lags = 5 ) {
@@ -322,7 +361,7 @@ DiD_matching_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, gro
     res <- map( gdat$data, DiD_matching_guideline,
                 Y_pre = Y_pre, Y_post = Y_post,
                 treatment = treatment, X = X,
-                r_theta = r_theta )
+                rT_theta = rT_theta )
 
     res = transpose( res )
 
