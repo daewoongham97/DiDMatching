@@ -184,33 +184,40 @@ result %>%
 if ( FALSE ) {
 
 
-    # The following is code to actually conduct the matching in order
-    # to obtain point estimates of the naive DiD and matching
-    # estimators. Used only for illustrative purposes.
+  # The following is code to actually conduct the matching in order
+  # to obtain point estimates of the naive DiD and matching
+  # estimators. Used only for illustrative purposes.
+  pre_trt = c("savg_math0", "savg_math1", "savg_math2", "savg_math3", "savg_math4", "savg_math5")
+  
+  dat$savg_mathpre = apply(dat[, pre_trt], 1, mean)
+  
+  ## do it within year
+  all_years = unique(dat$year)
+  
+  
+  final_df = dat
+  rownames(final_df) = 1:nrow(final_df)
+  matching = matchit(treat ~ ssize_1000 + savg_frpl0 + savg_hisp0 + savg_black0 + prop_new + principal_yrs + principal_transition, data = final_df)
+  
+  matched_controls = final_df[as.numeric(matching$match.matrix), ]
+  
+  naive_DiD_estimates = match_X_estimates = num_rows = vector()
+  for (i in 1:length(all_years)) {
+    in_df = dat[dat$year == all_years[i], ]
+    num_rows[i] = sum(in_df$treat)
+    trt = in_df[in_df$treat == 1, ]
+    ctrl = in_df[in_df$treat == 0, ]
+    naive_DiD_estimates[i] = (mean(trt$savg_math) - mean(ctrl$savg_math) ) - (mean(trt$savg_mathpre) - mean(ctrl$savg_mathpre) )
+   
+    in_matched_controls = matched_controls[matched_controls$year == all_years[i], ]
+    match_X_estimates[i] =  (mean(trt$savg_math) - mean(in_matched_controls$savg_math) ) -  (mean(trt$savg_mathpre) - mean(in_matched_controls$savg_mathpre) )
 
-    ## Naive DiD Estimates
-    trt = filter( dat, treat == 1 )
-    ctrl = filter( dat, treat == 0 )
-    final_df = as.data.frame(dat)
-
-    (mean(trt$savg_math) - mean(ctrl$savg_math) ) - (mean(trt$savg_math0) - mean(ctrl$savg_math0) )
-
-    ## DiD Estimates while matching on X
-    library(MatchIt)
-    rownames(final_df) = 1:nrow(final_df)
-    matching = matchit(treat ~ ssize_1000 + savg_frpl0 + savg_hisp0 + savg_black0 + prop_new + principal_yrs + principal_transition,
-                       data = final_df)
-
-    matched_controls = final_df[as.numeric(matching$match.matrix), ]
-
-    (mean(trt$savg_math) - mean(matched_controls$savg_math) )-  (mean(trt$savg_math0) - mean(matched_controls$savg_math0) )
-
-    ## DiD Estimates while matching on additionally pre-treatment outcome
-    matching = matchit(treat ~ ssize_1000 + savg_frpl0 + savg_hisp0 + savg_black0 + prop_new + principal_yrs + principal_transition + savg_math0 + savg_math1 + savg_math2 + savg_math3 + savg_math4 + savg_math5, data = final_df)
-
-    matched_controls = final_df[as.numeric(matching$match.matrix), ]
-
-    (mean(trt$savg_math) - mean(matched_controls$savg_math) ) -  (mean(trt$savg_math0) - mean(matched_controls$savg_math0) )
+    
+  }
+  
+  weighted.mean(naive_DiD_estimates, num_rows)
+  
+  weighted.mean(match_X_estimates, num_rows)
 
 
 }
