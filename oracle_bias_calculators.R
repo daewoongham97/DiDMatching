@@ -9,10 +9,9 @@
 #' Calculate true values of bias, etc., for given model with single x
 #' and theta.
 #'
-#' (This can only be run since we generated synthetic data with known
-#' truth)
+#' @param sig_x The variance of x
 #'
-calculate_truth <- function( beta_theta_1, beta_theta_0,
+calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
                                 beta_x_1, beta_x_0,
                                 mu_theta_1, mu_theta_0,
                                 mu_x_1, mu_x_0,
@@ -27,8 +26,75 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
     Delta_X = beta_x_1 - mean( beta_x_0 )
     delta_x = mu_x_1 - mu_x_0
 
-    bias_DiD =  Delta_theta * delta_theta +  delta_x * Delta_X
+    bias_naive =  Delta_theta * delta_theta +  delta_x * Delta_X
      #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
+
+    bias_X = Delta_theta * (delta_theta - rho * delta_x / sig_x )
+
+    if ( length( beta_theta_0 ) == 1 ) {
+        beta_theta_0 = rep( beta_theta_0, num_pre )
+    }
+    if ( length( beta_x_0 ) == 1 ) {
+        beta_x_0 = rep( beta_x_0, num_pre )
+    }
+    coefs = cbind( beta_theta_0, beta_x_0 )
+
+    varY = beta_theta_0^2 * sig_theta + beta_x_0^2 * sig_x + sigma_pre
+
+    sigma_thetaX = matrix( c( sig_theta, rho,
+                              rho, sig_x ), nrow= 2 )
+    sigma_YY = coefs %*% sigma_thetaX %*% t(coefs) + diag( rep( sigma_pre, num_pre ) )
+
+    sigma_XY = matrix( c( beta_x_0 * sig_x + beta_theta_0 * rho ), nrow = 1 )
+    mat = cbind( rbind( sig_x, t( sigma_XY ) ),
+                 rbind( sigma_XY, sigma_YY ) )
+    matInv = solve( mat )
+
+    sigma_thetaY = matrix( beta_theta_0 * sig_theta + beta_x_0 * rho, nrow = 1 )
+
+    A = cbind( rho, sigma_thetaY )
+
+    C = matrix( c( delta_x, beta_theta_0*delta_theta + beta_x_0*delta_x ),
+                ncol = 1 )
+
+    bias_XY <- A %*% matInv %*% C
+
+    tb <- tibble( what = c("naive", "X", "X & Y_pre" ),
+            bias = c( bias_naive, bias_X, bias_XY ) )
+    tb$bias_reduction = c( NA,
+                           abs( tb$bias[[1]] ) - abs( tb$bias[[2]] ),
+                           abs( tb$bias[[2]] ) - abs( tb$bias[[3]] ) )
+
+    tb$match = tb$bias_reduction > 0
+
+    tb
+}
+
+
+
+#' Calculate true values of bias, etc., for given model with single x
+#' and theta.
+#'
+#' (This can only be run since we generated synthetic data with known
+#' truth)
+#'
+calculate_truth <- function( beta_theta_1, beta_theta_0,
+                             beta_x_1, beta_x_0,
+                             mu_theta_1, mu_theta_0,
+                             mu_x_1, mu_x_0,
+                             sig_theta = 1, sig_x = 1,
+                             sigma_pre = 1.3, sigma_post = 0.01,
+                             p = 0.2, num_pre = 5, rho = 0.5 ) {
+
+
+    Delta_theta = beta_theta_1 - mean( beta_theta_0 )
+    delta_theta = mu_theta_1 - mu_theta_0
+
+    Delta_X = beta_x_1 - mean( beta_x_0 )
+    delta_x = mu_x_1 - mu_x_0
+
+    bias_DiD =  Delta_theta * delta_theta +  delta_x * Delta_X
+    #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
 
 
     # True Imbalance of Theta
@@ -80,6 +146,12 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
     list( biases = biases, params = param, delta = delta )
 
 }
+
+
+
+
+
+
 
 
 

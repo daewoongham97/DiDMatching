@@ -22,7 +22,8 @@ source( here::here( "DiD_matching_func.R" ) )
 source( here::here( "oracle_bias_calculators.R" ) )
 K = 1000
 
-beta_theta_1 = 1.5; beta_theta_0 = c(1, 0.75, 0.50)
+beta_theta_1 = 1.5
+beta_theta_0 = c(1, 0.75, 0.50)
 mu_theta_1 = 2; mu_theta_0 = 1
 mu_x_1 = 3
 mu_x_0 = 1.5
