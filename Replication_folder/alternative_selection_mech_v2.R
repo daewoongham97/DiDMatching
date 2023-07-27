@@ -1,4 +1,6 @@
 
+# This script tries to allow both the covariates and the residual to impact the outcome separately.
+
 # This script explores an alternate selection mechanism where
 # treatment is a function of the lagged outcome, whcih means it not
 # only depends on theta and X, but also on the residual of Y_pre.
@@ -6,10 +8,11 @@
 # The goal of this script is to explore what happens when we apply our
 # guidelines to this misspecified model.
 
-
+library( tidyverse )
 library(MatchIt)
 
 source( here::here( "data_simulator.R" ) )
+source( here::here( "DiD_matching_func.R" ) )
 
 
 ### Data generating process ###
@@ -20,7 +23,8 @@ make_data_assign <- function( N,
                        mu_theta = -1,
                        mu_x = 0,
                        probit_shift = 0,
-                       probit_coef = -0.5,
+                       probit_struct_coef = -0.5,
+                       probit_noise_coef = -0.5,
                        assign_mech = c("lag", "no resid", "original") ) {
 
     assign_mech = match.arg(assign_mech)
@@ -33,13 +37,15 @@ make_data_assign <- function( N,
     Y_pre1 = theta + X + rnorm( N, sd = sqrt(sigma) )
     Y_post = 1.5*theta + 1.2*X + rnorm(N, sd = sqrt(0.01))
 
-    trt = as.numeric(probit_shift + probit_coef*Y_pre + rnorm(N) < 0)
+    Ystruct = theta + X
 
-    # If assign_mech = true then just use theta and X.  So everything should align.
     if ( assign_mech == "no resid" ) {
-        ev = rnorm( N, sd = sqrt(sigma) )
-        trt =  as.numeric(probit_shift + probit_coef*(theta+X) + ev + rnorm(N) < 0)
+        # Regenerate the residuals so they are not connected to Ypre
+        e = rnorm( N, sd = sqrt(sigma) )
     }
+
+    trt = as.numeric(probit_shift + probit_struct_coef*Ystruct + probit_noise_coef*e + rnorm(N) < 0)
+
 
     dd = NA
     if ( assign_mech == "original" ) {
@@ -48,9 +54,9 @@ make_data_assign <- function( N,
         d_theta = mean( theta[trt==1] ) - mean( theta[trt==0] )
         d_X = mean( X[trt==1] ) - mean( X[trt==0] )
         ptx = mean( trt == 1 )
-        sig_theta = (var( theta[trt==1] ) + var( theta[trt==0] )) / 2
-        sig_x = (var( X[trt==1] ) + var( X[trt==0] )) / 2
-        sigma_pre = (var( e[ trt == 1 ] ) + var( e[ trt == 0 ] )) / 2
+        sig_theta = (sd( theta[trt==1] ) + sd( theta[trt==0] )) / 2
+        sig_x = (sd( X[trt==1] ) + sd( X[trt==0] )) / 2
+        sigma_pre = (sd( e[ trt == 1 ] ) + sd( e[ trt == 0 ] )) / 2
 
         dd = make_data( N = N,
                         beta_theta_1 = 1.5,
@@ -82,7 +88,7 @@ make_data_assign <- function( N,
 
 
 if ( FALSE ) {
-
+    # Demo DGP
     N = 10000
     sigma = 1
     mu_theta = -1
@@ -96,62 +102,11 @@ if ( FALSE ) {
 }
 
 
-### this part does the shapiro-wilkson test for normality ###
-
-if ( FALSE ) {
-
-    K = 1000
-    N = 10000
-    mu_theta = mu_x = 2
-    probit_coef = -0.5
-
-
-    test_result = rep( 0, K )
-    for (i in 1:K) {
-        dat = make_data_assign(N,
-                        mu_theta = mu_theta,
-                        mu_x = mu_x,
-                        probit_coef = probit_coef )
-
-        trt_theta = dat$theta[dat$trt == 1]
-        if ( length( trt_theta ) > 5000 ) {
-            trt_theta = trt_theta[1:5000]
-        }
-        test_result[i] = shapiro.test(trt_theta)$p.value
-    }
-
-    mean(test_result <= 0.05)
-    # 0.045
-
-}
-
-
-
-### This part produces Figure 1 in response to reviewer document ###
-
-if ( FALSE ) {
-
-    library(ggpubr)
-    dat = make_data_assign( N = N, mu_theta = mu_theta,
-                     probit_coef = probit_coef, probit_shift = 2 )
-    mean(dat$trt)
-
-    a = ggqqplot(dat$theta[dat$trt == 1], title = "theta (treatment)")
-
-    b = ggqqplot(dat$theta[dat$trt == 0], title = "theta (control)")
-    c = ggqqplot(dat$X[dat$trt == 1], title = "X (treatment)")
-    d = ggqqplot(dat$X[dat$trt == 0], title = "X (control)")
-
-    ggarrange(a, b, c, d, nrow = 2, ncol = 2)
-}
-
-
-### this part produces Figure 2 in the response to reviewer document ###
-
-source( here::here( "DiD_matching_func.R" ) )
 
 
 if ( FALSE ) {
+    # Test DGP and guideline call
+
     N = 10000
     dat = make_data_assign( N )
     head( dat )
@@ -173,6 +128,14 @@ if ( FALSE ) {
 }
 
 
+# Calculate the estimated rT_theta (reliability)
+calc_reliability <- function( dat ) {
+    md1 = lm( Y_pre1 ~ X, data=dat )
+    md0 = lm( Y_pre ~ X, data=dat )
+    mdtheta = lm( theta ~ X, data=dat )
+    mdF = lm( resid(mdtheta) ~ resid(md1) + resid(md0) )
+    summary(mdF)$adj.r.sq
+}
 
 #' This function generates a dataset and then calculates the empirical
 #' bias and the bias from the guideline formula, so they can be
@@ -183,16 +146,16 @@ if ( FALSE ) {
 #'
 #' The DGP generates 2 YPre values so we don't need to worry about
 #' estimating reliability to use the guideline.
-check_sigma <- function( sigma, assign_mech ) {
+check_sigma <- function( sigma, assign_mech, probit_noise_coef ) {
 
-    cat( "sigma:", sigma, "assign_mech:", assign_mech, "\n" )
+    cat( "sigma:", sigma, "assign_mech:", assign_mech, "pnc:", probit_noise_coef, "\n" )
 
-    dat = make_data_assign( N = N, sigma = sigma, probit_shift = 1, assign_mech = assign_mech )
+    dat = make_data_assign( N = N, sigma = sigma, probit_shift = 1,
+                            assign_mech = assign_mech,
+                            probit_noise_coef = probit_noise_coef )
 
-
-    # Calculate the estimated rT_theta (reliability) for T=1 guideline
-    #md = lm( Y_pre ~ X, data=dat )
-    #rel = var( dat$theta ) / var( resid( md ) )
+    #calc est reliability
+    #+ Y_prerel = var( dat$theta ) / var( resid( md ) )
 
     #e_DiD_match_both[i] = 1.5*((1 - rel)*d_theta)
     rec <- DiD_matching_guideline( Y_pre = c( "Y_pre", "Y_pre1" ), Y_post = "Y_post",
@@ -256,13 +219,16 @@ check_sigma <- function( sigma, assign_mech ) {
     fin$emp_match = fin$emp_reduction > 0
     fin$sigma = sigma
     fin$assign_mech = assign_mech
+    fin$probit_noise_coef = probit_noise_coef
 
-    fin <- relocate( fin, sigma, assign_mech, what, emp_bias,
+    fin <- relocate( fin, sigma, assign_mech, probit_noise_coef, what, emp_bias,
                      bias_reduction, emp_reduction,
                      match, emp_match ) %>%
         dplyr::select(-n) %>%
         rename( guide_reduction = bias_reduction,
                 guide_match = match )
+
+    fin$r_theta = calc_reliability(dat)
 
     fin
 }
@@ -274,16 +240,61 @@ if ( FALSE ) {
 
 
 R = 5
-K = 5
-sigma_E_2 = rep( seq( 0.3, 1.5, length.out = R ), each=K )
+K = 1
+sigma_E_2 = round( rep( seq( 0.3, 1.5, length.out = R ), each=K ), digits=1 )^2
+
 N = 10000
 
 params = expand_grid( sigma = sigma_E_2,
-                      assign_mech = c( "original", "lag", "no resid" ) )
-params
+                      assign_mech = c( "original", "lag", "no resid" ),
+                      probit_noise_coef = c(0, -0.1, -0.3, -0.5) )
+nrow(params)
 
-# Run the simulation
-res_full = map2_df( params$sigma, params$assign_mech, check_sigma )
+
+#### Look at the data generated ####
+
+if ( FALSE ) {
+
+    print( params )
+
+    pp = params
+    nrow( pp )
+    pp$data = pmap( pp, make_data_assign, N = 1000, probit_shift = 1 )
+    pp$reliability = map_dbl( pp$data, calc_reliability )
+    pp = unnest( pp, cols="data" )
+
+    ppS <- pp %>% group_by( probit_noise_coef, assign_mech, sigma, reliability ) %>%
+        mutate( sigma = sqrt(sigma) ) %>%
+        summarise( ptx = mean( trt ),
+                   sdY = sd( Y_pre ),
+                   sdY0 = sd( Y_pre[trt==0] ), .groups = "drop" )
+
+    ggplot( ppS, aes( sigma, reliability, col=assign_mech ) ) +
+        facet_wrap( ~ probit_noise_coef ) +
+        geom_point() + geom_line()
+
+
+    head( pp )
+    pp = filter( pp, probit_noise_coef != -0.1, assign_mech == "original" )
+    pp$alph = ifelse( pp$trt == 1, 1, 0.5 )
+    pp$trt = as.factor( pp$trt )
+    ggplot( pp, aes( theta, X, col=trt, alpha=alph ) ) +
+        facet_grid( sigma ~ probit_noise_coef ) +
+        geom_point( size = 0.2)
+
+
+    ggplot( pp, aes( Y_pre, X, col=trt, alpha=alph ) ) +
+        facet_grid( sigma ~ probit_noise_coef ) +
+        geom_point( size = 0.2)
+
+
+    ggplot( pp, aes( theta, Y_pre, col=trt, alpha=alph ) ) +
+        facet_grid( sigma ~ probit_noise_coef ) +
+        geom_point( size = 0.2)
+}
+
+#### Run the simulation ####
+res_full = pmap_df( params, check_sigma )
 
 
 print( res_full, n = 100 )
@@ -312,17 +323,18 @@ table( guideline = res$guide_match, empirical = res$emp_match, what = res$what, 
 # reduction
 
 resL <- res %>%
-    dplyr::select( sigma, assign_mech,
+    dplyr::select( sigma, assign_mech, probit_noise_coef,
                    what, guide_reduction, emp_reduction, guide_match, emp_match, emp_bias ) %>%
     pivot_longer( cols = c( guide_reduction, emp_reduction, guide_match, emp_match ),
                   names_to = c("method", ".value"),
                   names_pattern = '(.*)_(.*)',
                   values_to="reduction" )
 
-ggplot( resL, aes( sigma, reduction, col=method, group=method ) ) +
-    facet_grid( assign_mech ~ what ) +
-    geom_jitter( width = 0.02, height=0 ) +
-    geom_smooth( se=FALSE ) +
+ggplot( resL, aes( probit_noise_coef, reduction, col=method, group=method ) ) +
+    facet_grid( what + assign_mech ~ sigma ) +
+    #geom_jitter( width = 0.02, height=0 ) +
+    geom_point() + geom_line() +
+#    geom_smooth( se=FALSE ) +
     geom_hline( yintercept = 0 ) +
     theme_minimal() +
     labs( y = "Bias Reduction" )

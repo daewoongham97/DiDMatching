@@ -55,6 +55,17 @@ bootstrap_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group,
                                                        data = boot_df,
                                                        aggregate_only = aggregate_only,
                                                        n_lags = n_lags )
+
+        if ( aggregate_only ) {
+            ors = new_result
+            new_result = new_result$result
+            new_result$statistic = list( ors$statistic )
+            new_result$delta = list( ors$delta )
+            new_result$year = "ALL"
+            new_result <- relocate( new_result,
+                                    year, what ) %>%
+                relocate( agg_match, .after = delta )
+        }
         new_result
     }
 
@@ -72,7 +83,8 @@ bootstrap_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group,
 
 
 
-print_boot_result <- function( res_all ) {
+print_boot_result <- function( res_all, digits = 2 ) {
+
     years = filter( res_all, year == "ALL" )
     years
 
@@ -113,7 +125,8 @@ print_boot_result <- function( res_all ) {
         group_by( quantity ) %>%
         summarise( CI_l = quantile( statistic, 0.025 ),
                    CI_h = quantile( statistic, 0.975 ) ) %>%
-        as.data.frame() %>% print( row.names=FALSE)
+        as.data.frame() %>%
+        print( row.names=FALSE)
 
     # How did aggregate bias reduction and overall match recommendation
     # vary?
@@ -126,7 +139,7 @@ print_boot_result <- function( res_all ) {
                    per_aggmatch = mean( agg_match ),
                    bias_CI_l = quantile( bias_reduction, 0.025 ),
                    bias_CI_h = quantile( bias_reduction, 0.975 ) ) %>%
-        mutate( across( where( is.numeric ), ~ round( ., digits=2 ) ) ) %>%
+        mutate( across( where( is.numeric ), ~ round( ., digits=digits ) ) ) %>%
         as.data.frame() %>% print( row.names=FALSE)
 
     invisible( res_all )

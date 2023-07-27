@@ -80,7 +80,7 @@ make_data = function(N,
     X[treatment == 0] = controls[, 2]
 
     Y_pre = list()
-    Y_post = 5 + beta_theta_1*theta + beta_x_1*X + rnorm(N, mean = 0,sd = sigma_post)
+    Y_post = 5 + beta_theta_1*theta + beta_x_1*X + rnorm(N, mean = 0, sd = sigma_post)
     df = data.frame(treatment = treatment, theta, X)
 
     if (  num_pre > 1 ) {

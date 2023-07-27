@@ -12,15 +12,41 @@
 #' This function calculates the parameters for the "match on Ypre"
 #' guideline, averaging across the pre-treatment time periods to gain
 #' stability (and take into account non-parallel trends).
-aggregate_residual_calcs <- function( all_residuals, post_residuals ) {
+aggregate_residual_calcs <- function( all_residuals, post_residuals,
+                                      method = c( "twoperiod", "minimum", "average", "last" ) ) {
+
+    method = match.arg(method)
 
     T = ncol(all_residuals)
 
-    # Calc sigma2_e with only two lagged time point
-    sigma2_e = var( all_residuals[,T] - all_residuals[, T-1] ) /2
-
-
     all_vts = apply( all_residuals, 2, var )
+
+    sigma2_e = NA
+    if ( method == "twoperiod" ) {
+        # Calc sigma2_e with only two lagged time point
+        sigma2_e = var( all_residuals[,T] - all_residuals[, T-1] ) / 2
+    } else if ( method == "last" ) {
+
+        # Calc sigma2_e with only last lagged time point
+        # (No longer used, see alternate, below.)
+        Y_res = apply( all_residuals[,-T], 1, mean )
+        sigma2_e = var( all_residuals[,T] - Y_res ) * (T-1) / T
+    } else {
+        # Alternate: Calculate average sigma2_e
+        tots = apply( all_residuals, 1, sum )
+        vars <- map_dbl( 1:T, function( c ) {
+            dels = all_residuals[,c] - tots / (T-1)
+            dels = (1 + 1/(T-1))*all_residuals[,c] - tots / (T-1)
+            var( dels )
+        } )
+        if (method == "average" ) {
+            sigma2_e = mean( vars ) * (T-1)/T
+        } else {
+            # minimum
+            sigma2_e = min( vars ) * (T-1)/T
+        }
+    }
+
     beta2_pre = all_vts - sigma2_e
     if ( any( beta2_pre < 0 ) ) {
         warning( "Negative estimated beta_theta coefficients", call. = FALSE )
@@ -28,11 +54,16 @@ aggregate_residual_calcs <- function( all_residuals, post_residuals ) {
 
     rT_theta = T * mean(beta2_pre) / (T*mean(beta2_pre) + sigma2_e)
 
-    beta2_post_ests = var(post_residuals) - sigma2_e
+    beta2_post_est = var(post_residuals) - sigma2_e
+    if ( beta2_post_est < 0 ) {
+        warning( glue::glue("negative estimated coefficient for beta_post^2 of {beta2_post_est}"),
+                 call. = FALSE )
+        beta2_post_est = 0
+    }
 
     list( sigma2_e = sigma2_e,
           est_beta_theta_pre = sqrt( mean( beta2_pre ) ),
-          est_beta_theta_post = sqrt( beta2_post_ests ),
+          est_beta_theta_post = sqrt( beta2_post_est ),
           rT_theta = rT_theta )
 }
 
@@ -104,7 +135,8 @@ aggregate_residual_calcs_reliability <- function( all_residuals, post_residuals,
 #'   additional table containing estimated parameters, e.g., estimated
 #'   reliability, estimated pre-slope, etc.}
 DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
-                                  rT_theta = NULL ) {
+                                  rT_theta = NULL,
+                                  sigma2_e_method = "twoperiod" ) {
 
     if ( is.null( X ) ) {
         X = ".X"
@@ -189,7 +221,8 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
 
     params = NULL
     if ( is.null( rT_theta ) ) {
-        params <- aggregate_residual_calcs( all_residuals, post_residuals )
+        params <- aggregate_residual_calcs( all_residuals, post_residuals,
+                                            method = sigma2_e_method )
     } else {
         params <- aggregate_residual_calcs_reliability( all_residuals, post_residuals,
                                                         rT_theta = rT_theta )
@@ -215,7 +248,6 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
 
         predic_trt = predict(reg_x_pre[[i]], trt)
         r1_trt[, i] = trt[[ Y_pre[i] ]] - predic_trt
-
     }
 
     ctrl_mean_residuals = apply(r1_ctrl, 1, mean)
@@ -338,7 +370,8 @@ DiD_matching_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, gro
                                             rT_theta = NULL,
                                             add_lagged_outcomes = FALSE,
                                             aggregate_only = FALSE,
-                                            n_lags = 5 ) {
+                                            n_lags = 5,
+                                            sigma2_e_method = "twoperiod" ) {
 
     if ( add_lagged_outcomes ) {
         stopifnot( !is.null( n_lags ) && is.numeric( n_lags ) )
@@ -361,7 +394,8 @@ DiD_matching_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, gro
     res <- map( gdat$data, DiD_matching_guideline,
                 Y_pre = Y_pre, Y_post = Y_post,
                 treatment = treatment, X = X,
-                rT_theta = rT_theta )
+                rT_theta = rT_theta,
+                sigma2_e_method = sigma2_e_method )
 
     res = transpose( res )
 
@@ -370,7 +404,6 @@ DiD_matching_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, gro
     gdat$delta = res$delta
 
     gdat$data = NULL
-
 
     gdat <- gdat %>% unnest( cols = result )
 

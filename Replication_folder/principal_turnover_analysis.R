@@ -80,6 +80,19 @@ res_stg_full %>%
 
 
 
+# Different way of estimating latent components.
+# No real change here.
+res_stg_alt = DiD_matching_guideline_staggered( Y_pre = pre_years,
+                                            Y_post = tx_year,
+                                            treatment = "treat",
+                                            group = "year",
+                                            X = c_vars,
+                                            data = dat,
+                                            sigma2_e_method = "minimum",
+                                            aggregate_only = TRUE )
+res_stg_alt$result
+res_stg$result
+
 
 
 
