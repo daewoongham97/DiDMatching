@@ -35,7 +35,7 @@ make_data = function(N, seed = NULL, beta_theta_1, beta_theta_0,
     theta[treatment == 1] = treats
     theta[treatment == 0] = controls
     
-    Y_post = 2 + beta_theta_1*theta + rnorm(N, mean = 0, sd = sigma_post)
+    Y_post = 2 + beta_theta_1*theta + rnorm(N, mean = 0, sd = sigma_pre)
     df = data.frame(Y_post = Y_post, treatment = treatment, theta = theta)
     
     for (i in 1:(t)) {
@@ -47,50 +47,170 @@ make_data = function(N, seed = NULL, beta_theta_1, beta_theta_0,
 }
 ```
 
+# redefining our function to only return more things like estimated sigma_E^2
 ```{r}
-# this function basically repeats the guideline that we have in our github
-# I only use this function because I coded this almost a year ago and just kept it
-# but it is the same as what we are doing 
-DiD_matchy_guideline = function(Y_pre, Y_post, treatment, data) {
+source_url("https://raw.githubusercontent.com/daewoongham97/DiDMatching/reorganize_files/DiD_matching_func.R")
+DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
+                                  rT_theta = NULL ) {
+
+    if ( is.null( X ) ) {
+        X = ".X"
+        data$.X = 1
+    }
+
+    # simple checks
+    col_names = colnames(data)
+    if (!all(Y_pre %in% col_names)) stop("Y_pre is not in column of data")
+    if (!all(Y_post %in% col_names)) stop("Y_post is not in column of data")
+    if (!all(X %in% col_names)) stop("X is not in column of data")
+    if (!all(treatment %in% col_names)) stop("treatment is not in column of data")
+
+    if (!(is.numeric(data[[treatment]]))) stop("Treatment not numeric")
+    if (!all(unique(data[[treatment]]) %in% c(0, 1))) stop("Treatment is not binary")
+    if (!all( (sapply( data[X], class) %in% "numeric") ) ) stop("X is not numeric")
+
+
+    ctrl = data[data[[treatment]] == 0, ]
+    trt = data[data[[treatment]] == 1, ]
+    if ( nrow( ctrl ) == 0 ) {
+        stop( "No control units" )
+    }
+    if ( nrow( trt ) == 0 ) {
+        stop( "No treated units" )
+    }
+
+    n = nrow(data)
+    n_tx = nrow(trt)
     t = length(Y_pre)
-    # getting the new response based on the average of all the pre-treatment (residualized) outcomes
-    
-    ctrl = data[data$treatment ==0, ]
-    
-    Y_res = ctrl[, Y_pre[-1]]
-    Y_res = apply(Y_res, 1, mean)
-    
-    est_sig_pre = var(ctrl[, Y_pre[1]] - Y_res)/(1 + 1/(t-1))
-    
-    emp_cov = cov(ctrl[, Y_pre[1]] , ctrl[, Y_post])
-    v_t = var(ctrl[, Y_pre[1]])
-    
-    est_beta_theta_pre = sqrt(v_t - est_sig_pre)
-    est_beta_theta_post = emp_cov/est_beta_theta_pre
-    
-    est_Delta_theta = est_beta_theta_post - est_beta_theta_pre
-    
-    ratio = est_beta_theta_pre/est_beta_theta_post; ratio
-    
-    r_theta = t*est_beta_theta_pre^2/(t*est_beta_theta_pre^2 + est_sig_pre)
-    
-    # checking condition in Guideline (result for second row second column of Table 1)
-    condition = r_theta >= 1 - abs(1 - ratio)
-    
-    est_delta_theta = (mean(data[, Y_pre[1]][data$treatment == 1]) - mean(data[, Y_pre[1]][data$treatment == 0]))/est_beta_theta_pre
-    
-    est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - r_theta))
-    
-    result = data.frame(est_sig_pre, est_beta_theta_pre, est_beta_theta_post, 
-                        est_Delta_theta, ratio, r_theta, est_delta_theta, est_tau_xy)
-    return(result)
+
+    if ( t == 1 && is.null( rT_theta ) ) {
+        stop( "Cannot estimate guideline without specifying rT_theta with single pre-treatment outcome" )
+    }
+
+    ## Guideline 1) Estimating Delta_X
+    if (length(X) > 1) {
+        est_delta_x = colMeans(trt[, X]) - colMeans(ctrl[, X])
+    } else {
+        est_delta_x = mean(trt[[X]]) - mean(ctrl[[X]])
+    }
+
+    reg_x_pre = list()
+
+    for (i in 1:t) {
+        form = formula(paste0(Y_pre[i], " ~ ", paste0(X, collapse = " + ")))
+        lm_obj = lm(form, data = ctrl)
+        reg_x_pre[[i]] = lm_obj
+    }
+
+    form = formula(paste0(Y_post, " ~ ", paste0(X, collapse = " + ")))
+    reg_x_post = lm(form, data = ctrl)
+
+    all_x_slopes = lapply(reg_x_pre, function(x) coef(x)[-1])
+
+    x_slope_avg = vector()
+    for (i in 1:length(all_x_slopes[[1]])) {
+        x_slope_avg[i] = mean(sapply(all_x_slopes, "[[", i))
+    }
+
+    x_slope_post = coef(reg_x_post)[-1]
+
+    slopes = tibble( quantity = names( x_slope_post ),
+                     beta_pre = x_slope_avg,
+                     beta_post = x_slope_post,
+                     Delta = x_slope_post - x_slope_avg,
+                     delta = est_delta_x )
+
+    delta_tau_x = abs(sum(est_delta_x*(x_slope_post - x_slope_avg)))
+
+
+    ## Guideline 2)
+
+    # getting the new response based on the average of all the
+    # pre-treatment (residualized) outcomes
+    all_residuals = lapply(reg_x_pre, residuals)
+    stopifnot( ncol( all_residuals ) == length(Y_pre) )
+    names( all_residuals ) = Y_pre
+    all_residuals = do.call( cbind, all_residuals )
+
+    post_residuals = residuals(reg_x_post)
+
+    params = NULL
+    if ( is.null( rT_theta ) ) {
+        params <- aggregate_residual_calcs( all_residuals, post_residuals )
+    } else {
+        params <- aggregate_residual_calcs_reliability( all_residuals, post_residuals,
+                                                        rT_theta = rT_theta )
+    }
+    est_sigma_squared = params$sigma2_e
+    est_beta_theta_pre = params$est_beta_theta_pre
+    est_beta_theta_post = params$est_beta_theta_post
+    est_Delta_theta = params$est_beta_theta_post - params$est_beta_theta_pre
+    s_ratio = params$est_beta_theta_pre/params$est_beta_theta_post
+    rT_theta = params$rT_theta
+
+
+    # checking condition in Guideline (result for second row second
+    # column of Table 1)
+    condition = rT_theta >= 1 - abs(1 - s_ratio)
+
+    # estimated reduction in bias
+    r1_ctrl =  matrix(NA, nrow = nrow(ctrl), ncol = t)
+    r1_trt = matrix(NA, nrow = nrow(trt), ncol = t)
+    for (i in 1:t) {
+        predic_ctrl = predict(reg_x_pre[[i]], ctrl)
+        r1_ctrl[, i] = ctrl[[ Y_pre[i] ]] - predic_ctrl
+
+        predic_trt = predict(reg_x_pre[[i]], trt)
+        r1_trt[, i] = trt[[ Y_pre[i] ]] - predic_trt
+
+    }
+
+    ctrl_mean_residuals = apply(r1_ctrl, 1, mean)
+    trt_mean_residuals = apply(r1_trt, 1, mean)
+
+    est_delta_theta = (mean(trt_mean_residuals) - mean(ctrl_mean_residuals))/est_beta_theta_pre
+
+    est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - rT_theta))
+
+
+    ## Pack up results
+    result_df = tribble( ~ what,        ~ match, ~ bias_reduction, ~ n, ~ n_tx,
+                         "X",              TRUE,      delta_tau_x, n, n_tx,
+                         "X & Y_pre", condition,       est_tau_xy, n, n_tx )
+
+
+    #est_delta_x = tibble( quantity = paste0( "delta_x: ", names(est_delta_x) ),
+    #                      statistic = est_delta_x)
+
+    deltas = tribble( ~ quantity,   ~beta_pre, ~beta_post, ~Delta, ~delta,
+                      "theta (~)",  est_beta_theta_pre, est_beta_theta_post, est_Delta_theta, est_delta_theta )
+
+    deltas = bind_rows( slopes, deltas )
+
+    estimate_df = tribble( ~ quantity,         ~ statistic,
+                           "Reliability (rho)" , rT_theta,
+                           #"pre-slope (beta_T-1)" , est_beta_theta_pre,
+                           #"post-slope (beta_T)" , est_beta_theta_post,
+                           "s",                  s_ratio,
+                           #"delta_theta (~)" , est_delta_theta,
+                           #"Delta_theta (~)", est_beta_theta_post - est_beta_theta_pre )
+    )
+
+    out = list(result = result_df,
+               statistic = estimate_df,
+               delta = deltas,  est_sigma_squared = est_sigma_squared)
+
+    return(out)
 }
+```
 
 
-K = 1000
+
+```{r}
+K = 10000
 
 beta_theta_1 = 1.5; beta_theta_0 = c(1, 0.75, 0.50); mu_theta_1 = 2; mu_theta_0 = 1
-sig_theta = 1; sigma_pre = 1.3; sigma_post = 1; p = 0.2; t = 3; N = 20000;
+sig_theta = 1; sigma_pre = 1.3; sigma_post = sigma_pre; p = 0.2; t = 3; N = 20000;
 
 # boundary
 #sigma_pre = 1.347 (the exact decision boundary point)
@@ -147,13 +267,17 @@ for (j in 1:length(sigma_pre_tests)) {
         Y_pre = colnames(df)[4:(4+(t-1))]
         Y_post = "Y_post"
         treatment = "treatment"
-        result = DiD_matchy_guideline(Y_pre, Y_post, treatment, df)
-        match[i] = result$r_theta >= 1 - abs(1 - result$ratio)
-        tau_xy[i] = result$est_tau_xy 
-        est_beta0[i] = result$est_beta_theta_pre
-        est_beta1[i] = result$est_beta_theta_post
-        est_delta_theta[i] = result$est_delta_theta
-        est_sig_pre_sq[i] = result$est_sig_pre
+        result = DiD_matching_guideline(Y_pre = Y_pre,
+                                            Y_post = Y_post,
+                                            treatment = treatment,
+                                            X = NULL,
+                                            data = df)
+        match[i] = as.numeric(result$result[2, 2])
+        tau_xy[i] = as.numeric(result$result$bias_reduction[2])
+        est_beta0[i] = as.numeric(result$delta[2, 2])
+        est_beta1[i] = as.numeric(result$delta[2, 3])
+        est_delta_theta[i] = as.numeric(result$delta[2, 5])
+        est_sig_pre_sq[i] = as.numeric(result$est_sigma_squared)
     }
     correct_decision[j] = mean(match)
     a_tau_xy[j] = mean(tau_xy)
@@ -161,8 +285,7 @@ for (j in 1:length(sigma_pre_tests)) {
     a_est_beta1[j] = mean(est_beta1)
     a_est_delta_theta[j] = mean(est_delta_theta)
     a_est_sig_pre_sq[j] = mean(est_sig_pre_sq)
-    a_tau_xy[j] = mean(tau_xy)
-    
+
     print(j)
 }
 ```
@@ -171,11 +294,10 @@ for (j in 1:length(sigma_pre_tests)) {
 ```{r}
 a_tau_xy; true_diffs
 
-a_est_beta0; beta_theta_0
+a_est_beta0; mean(beta_theta_0)
 a_est_beta1; beta_theta_1
 a_est_delta_theta; mu_theta_1 - mu_theta_0
 a_est_sig_pre_sq; sigma_pre_tests^2
-
 ```
 
 
