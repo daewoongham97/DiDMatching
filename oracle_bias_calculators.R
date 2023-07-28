@@ -15,7 +15,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
                                 mu_theta_1, mu_theta_0,
                                 mu_x_1, mu_x_0,
                                 sigma2_theta = 1, sigma2_x = 1,
-                                sigma2_pre = 1.3, sigma2_post = 0.01,
+                                sigma2_pre = 1.3, sigma2_post = sigma2_pre,
                                 p = 0.2, num_pre = 5, rho = 0.5 ) {
 
     cov_Xtheta = sqrt( sigma2_theta * sigma2_x ) * rho

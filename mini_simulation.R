@@ -47,7 +47,7 @@ if ( FALSE ) {
     one_run( N = 1000, beta_theta_1 = 1.5, beta_theta_0 = 1.0,
              beta_x_1 = 0.8, beta_x_0 = 0.5,
              mu_theta_1 = 1, mu_theta_0 = 0.1, mu_x_1 = 0.7, mu_x_0 = 0.5, sigma2_theta = 1,
-             sigma2_x = 1, sigma2_pre = 0.8, sigma2_post = 0.01,  p = 0.2, rho = 0.2, num_pre = 4 )
+             sigma2_x = 1, sigma2_pre = 0.8, p = 0.2, rho = 0.2, num_pre = 4 )
 
 }
 
@@ -57,7 +57,8 @@ if ( FALSE ) {
     N = 1000; beta_theta_1 = 1.5; beta_theta_0 = 1.0;
     beta_x_1 = 0.8; beta_x_0 = 0.5;
     mu_theta_1 = 1; mu_theta_0 = 0.1; mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
-    sigma2_x = 1; sigma2_pre = 0.8; sigma2_post = 0.01;  p = 0.2; rho = 0.2; num_pre = 4
+    sigma2_x = 1; sigma2_pre = 0.8;
+    p = 0.2; rho = 0.2; num_pre = 4
 
 
 
@@ -66,34 +67,45 @@ if ( FALSE ) {
 #### Run the small simulation ####
 
 
-run_validation_simulation <- function( rho, s_theta, s_x, delta_x ) {
-    cat( "Running params -- rho:", rho, "s_theta:", s_theta, "s_x:", s_x, "\n" )
+run_validation_simulation <- function( rho, s_theta, s_x, delta_x, R = 100 ) {
+    cat( "Running params: rho:", rho, "s_theta:", s_theta, "s_x:", s_x, "\n" )
 
-    rps = map( 1:100, ~
+    rps = map( 1:R, ~
                    one_run( N = 2000,
                             beta_theta_1 = 1.5, beta_theta_0 = 1.5 * s_theta,
                             beta_x_1 = 2, beta_x_0 = 2 * s_x,
                             mu_theta_1 = 1.5, mu_theta_0 = 0,
                             mu_x_1 = 0.5 + delta_x, mu_x_0 = 0.5,
                             sigma2_theta = 2, sigma2_x = 3,
-                            sigma2_pre = 4, sigma2_post = 0.5,
+                            sigma2_pre = 4,
                             p = 0.2, rho = rho,
                             num_pre = 6 ) )
     rps <- bind_rows( rps, .id="runID" )
     rps
 
 
-    rps %>% group_by( quantity ) %>%
+    res <- rps %>% group_by( quantity ) %>%
         summarise( match = mean(match),
                    Eest = mean(statistic),
+
+                   sdtrue = sd(true),
                    true = mean(true),
                    true.v = mean(true.v),
                    MCSE = sd( statistic )/ sqrt(n()),
                    t = (Eest - true)/MCSE,
                    t.v = (Eest - true.v) / MCSE )
 
+    stopifnot( all( res$sdtrue < 0.0001 ) )
+    res$sdtrue = NULL
+
+    res
 }
 
+if ( FALSE ) {
+    run_validation_simulation( rho = 0.5, s_theta = 0.5,
+                               s_x = 2, delta_x = 2 )
+
+}
 
 sims <- expand_grid( rho = c( 0, 0.5 ),
                      s_theta = c( 0.5, 1, 2 ),
@@ -102,7 +114,8 @@ sims <- expand_grid( rho = c( 0, 0.5 ),
 sims <- filter( sims, delta_x == 2 | s_x == 1 )
 
 cat( "Running", nrow(sims), "simulations\n" )
-rawres = pmap_df( sims, run_validation_simulation, .id = "scenario" )
+rawres = pmap_df( sims, run_validation_simulation, R = 1000,
+                  .id = "scenario" )
 
 cat( "Complete\n" )
 
@@ -125,11 +138,43 @@ res %>% arrange( quantity ) %>%
     relocate( quantity ) %>%
     print( n = 100 )
 
-res %>%
-    filter( !( quantity %in% c("X", "theta (~)") ) ) %>%
-ggplot( aes( Eest, true ) ) +
+gres <- res %>%
+    filter( !( quantity %in% c("X", "theta (~)") ) )
+
+gres %>%
+    ggplot( aes( Eest, true,
+                 col=as.factor(s_theta), pch=as.factor(rho) ) ) +
     facet_wrap( ~ quantity, scales="free" ) +
     geom_point() +
+#    geom_point( data = filter( gres, delta_x==2 ), size = 3 ) +
     #coord_fixed() +
+#    geom_point( aes( Eest, true.v ) ) +
+    geom_point( aes( Eest, true.v ), shape = 1, size = 3, stroke = 0.5) +
     geom_abline( ) +
     theme_minimal()
+
+
+# assuming you have a dataframe df with columns x, y for points and a logical vector 'highlight' indicating the points to be highlighted
+df <- data.frame(
+    x = c(1, 2, 3, 4, 5),
+    y = c(2, 3, 1, 5, 4),
+    highlight = c(FALSE, TRUE, FALSE, TRUE, FALSE)
+)
+
+library(ggplot2)
+
+ggplot(df) +
+    geom_point(aes(x = x, y = y), color = "black", size = 3) +
+    geom_point(data = subset(df, highlight), aes(x = x, y = y), shape = 1, size = 5, stroke = 2)
+
+
+# What is causing departures?  This exploration does not illuminate.
+gres
+summary( gres$t )
+gres$log_t = log( 0.1 + abs(gres$t) )
+summary( gres$log_t )
+
+M <- lm( log_t ~ (as.factor(rho) + as.factor(s_theta) + as.factor(s_x) + as.factor(delta_x))^2,
+         data=gres )
+summary( M )
+anova( M )
