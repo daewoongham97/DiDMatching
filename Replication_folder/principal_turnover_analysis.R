@@ -77,8 +77,28 @@ res_stg_full %>%
     filter( what != "X" ) %>%
     print( n = 100 )
 
+res_stg_full %>%
+    group_by( what ) %>%
+    summarise( min_bias = min( bias_reduction ),
+               max_bias = max( bias_reduction ) )
 
 
+stats <- res_stg_full %>%
+    filter( what != "X" ) %>%
+    dplyr::select(-delta, -what, -agg_match) %>%
+    unnest( cols = statistic ) %>%
+    pivot_wider( names_from = quantity, values_from=statistic ) %>%
+    ungroup()
+
+stats %>%
+    summarise( min_bias = min( bias_reduction ),
+               max_bias = max( bias_reduction ),
+               sd_s = sd( s ),
+               sd_rho = sd( `Reliability (rho)` ) )
+library( skimr )
+skimr::skim(stats) %>%
+    yank( "numeric" ) %>%
+    dplyr::select(-n_missing, -complete_rate)
 
 # Different way of estimating latent components.
 # No real change here.
@@ -111,12 +131,23 @@ res_boot = bootstrap_guideline_staggered( Y_pre = pre_years,
                                           group = "year",
                                           X = c_vars,
                                           data = dat,
-                                          B = 100 )
+                                          B = 1000,
+                                          parallel = TRUE,
+                                          seed = 40954 )
 
+
+saveRDS( res_boot, file="bootstrap_results.rds" )
 
 # This will print out info from the returned object.
-print_boot_result( res_boot )
+res_boot = readRDS( "bootstrap_results.rds" )
+print_boot_result( res_boot, digits=3 )
 
+counts <- res_boot %>%
+    filter( year != "ALL", what != "X" ) %>%
+    group_by( runID ) %>%
+    summarise( match = sum(match) )
+table( counts$match )
+quantile( counts$match, c(0.025, 0.975))
 
 
 

@@ -20,7 +20,9 @@ bootstrap_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group,
                                          aggregate_only = FALSE,
                                          n_lags = 5,
                                          B = 100,
-                                         silent = TRUE ) {
+                                         silent = TRUE,
+                                         parallel = FALSE,
+                                         seed = NULL) {
 
 
 
@@ -38,7 +40,11 @@ bootstrap_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group,
         nest()
     datg = datg$data
 
-    one_boot <- function( ) {
+    one_boot <- function( seed = NULL) {
+
+        if ( !is.null( seed ) ) {
+            set.seed(seed)
+        }
 
         # bootstrap schools, and then make new clusters of the schools
         # via join() (so if we bootstrap an id multiple times, we get
@@ -69,7 +75,21 @@ bootstrap_guideline_staggered = function(Y_pre = NULL, Y_post, treatment, group,
         new_result
     }
 
-    res_all = map_df( 1:B, ~ one_boot(), .id = "runID")
+    res_all = NA
+    if ( parallel ) {
+        if ( is.null(seed) ) {
+            seed = round( runif(1) * 100000 )
+        }
+        library( furrr )
+        plan(multisession, workers = parallel::detectCores() - 1 )
+        res_all = future_map_dfr(1:B,
+                                 ~ one_boot( . + seed ),
+                                 .options = furrr_options(seed = NULL),
+                                 .progress = TRUE,
+                                 .id = "runID" )
+    } else {
+        res_all = map_df( 1:B, ~ one_boot(), .id = "runID" )
+    }
 
     if ( !silent ) {
 

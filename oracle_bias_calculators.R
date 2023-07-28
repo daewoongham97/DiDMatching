@@ -5,20 +5,20 @@
 # the results to empirically found results from simulations.
 
 
-
 #' Calculate true values of bias, etc., for given model with single x
 #' and theta.
 #'
-#' @param sig_x The variance of x
-#'
+#' @param sigma2_x The variance of x
+#' @param rho The correlation of X and theta.
 calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
                                 beta_x_1, beta_x_0,
                                 mu_theta_1, mu_theta_0,
                                 mu_x_1, mu_x_0,
-                                sig_theta = 1, sig_x = 1,
-                                sigma_pre = 1.3, sigma_post = 0.01,
+                                sigma2_theta = 1, sigma2_x = 1,
+                                sigma2_pre = 1.3, sigma2_post = 0.01,
                                 p = 0.2, num_pre = 5, rho = 0.5 ) {
 
+    cov_Xtheta = sqrt( sigma2_theta * sigma2_x ) * rho
 
     Delta_theta = beta_theta_1 - mean( beta_theta_0 )
     delta_theta = mu_theta_1 - mu_theta_0
@@ -29,7 +29,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
     bias_naive =  Delta_theta * delta_theta +  delta_x * Delta_X
      #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
 
-    bias_X = Delta_theta * (delta_theta - rho * delta_x / sig_x )
+    bias_X = Delta_theta * (delta_theta - rho * delta_x * sqrt( sigma2_theta / sigma2_x ) )
 
     if ( length( beta_theta_0 ) == 1 ) {
         beta_theta_0 = rep( beta_theta_0, num_pre )
@@ -39,25 +39,32 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
     }
     coefs = cbind( beta_theta_0, beta_x_0 )
 
-    varY = beta_theta_0^2 * sig_theta + beta_x_0^2 * sig_x + sigma_pre
+    varY = beta_theta_0^2 * sigma2_theta + beta_x_0^2 * sigma2_x +
+        2*(beta_theta_0*beta_x_0)*cov_Xtheta +
+        sigma2_pre
 
-    sigma_thetaX = matrix( c( sig_theta, rho,
-                              rho, sig_x ), nrow= 2 )
-    sigma_YY = coefs %*% sigma_thetaX %*% t(coefs) + diag( rep( sigma_pre, num_pre ) )
+    sigma_thetaX = matrix( c( sigma2_theta, cov_Xtheta,
+                              cov_Xtheta, sigma2_x ), nrow= 2 )
+    sigma_YY = coefs %*% sigma_thetaX %*% t(coefs) + diag( rep( sigma2_pre, num_pre ) )
 
-    sigma_XY = matrix( c( beta_x_0 * sig_x + beta_theta_0 * rho ), nrow = 1 )
-    mat = cbind( rbind( sig_x, t( sigma_XY ) ),
+    sigma_XY = matrix( c( beta_x_0 * sigma2_x + beta_theta_0 * cov_Xtheta ), nrow = 1 )
+
+    mat = cbind( rbind( sigma2_x, t( sigma_XY ) ),
                  rbind( sigma_XY, sigma_YY ) )
     matInv = solve( mat )
 
-    sigma_thetaY = matrix( beta_theta_0 * sig_theta + beta_x_0 * rho, nrow = 1 )
+    sigma_thetaY = matrix( beta_theta_0 * sigma2_theta + beta_x_0 * cov_Xtheta, nrow = 1 )
 
     A = cbind( rho, sigma_thetaY )
 
     C = matrix( c( delta_x, beta_theta_0*delta_theta + beta_x_0*delta_x ),
                 ncol = 1 )
 
-    bias_XY <- A %*% matInv %*% C
+    AmC <- A %*% matInv %*% C
+    bias_XY <- beta_theta_1*(delta_theta - AmC)
+    # = beta_theta_1 * delta_theta * ( 1 - AmC / delta_theta )
+    # = beta_theta_1 * delta_theta * ( 1 - r_theta^T )
+    # How get reliability and delta_theta_tilde here, if at all?
 
     tb <- tibble( what = c("naive", "X", "X & Y_pre" ),
             bias = c( bias_naive, bias_X, bias_XY ) )
@@ -82,8 +89,8 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
                              beta_x_1, beta_x_0,
                              mu_theta_1, mu_theta_0,
                              mu_x_1, mu_x_0,
-                             sig_theta = 1, sig_x = 1,
-                             sigma_pre = 1.3, sigma_post = 0.01,
+                             sigma2_theta = 1, sigma2_x = 1,
+                             sigma2_pre = 1.3, sigma2_post = 0.01,
                              p = 0.2, num_pre = 5, rho = 0.5 ) {
 
 
@@ -98,7 +105,7 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
 
 
     # True Imbalance of Theta
-    tilde_delta_theta = (mu_theta_1 - mu_theta_0) - (rho*sig_theta*sig_x)/sig_x^2*(mu_x_1 - mu_x_0)
+    tilde_delta_theta = (mu_theta_1 - mu_theta_0) - (rho*sigma2_theta*sigma2_x)/sigma2_x^2*(mu_x_1 - mu_x_0)
     tilde_delta_theta
 
 
@@ -112,8 +119,8 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
     abs(bias_X - bias_naive)
 
     # True reliability
-    tilde_sigma_theta = sig_theta^2 - (rho*sig_theta*sig_x)^2/sig_x^2
-    r = (num_pre*beta_theta_0^2*tilde_sigma_theta)/ ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma_pre^2)
+    tilde_sigma_theta = sigma2_theta^2 - (rho*sigma2_theta*sigma2_x)^2/sigma2_x^2
+    r = (num_pre*beta_theta_0^2*tilde_sigma_theta)/ ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma2_pre^2)
     r
 
     # True reduction in bias from matching additionally on Y_pre
@@ -160,15 +167,15 @@ calculate_truth_v2 <- function( beta_theta_1, beta_theta_0,
                              beta_x_1, beta_x_0,
                              mu_theta_1, mu_theta_0,
                              mu_x_1, mu_x_0,
-                             sig_theta = 1, sig_x = 1,
-                             sigma_pre = 1.3, sigma_post = 0.01,
+                             sigma2_theta = 1, sigma2_x = 1,
+                             sigma2_pre = 1.3, sigma2_post = 0.01,
                              p = 0.2, num_pre = 5, rho = 0.5 ) {
 
 
 
 
     # True Imbalance of Theta
-    tilde_delta_theta = (mu_theta_1 - mu_theta_0) - (rho*sig_theta*sig_x)/sig_x^2*(mu_x_1 - mu_x_0)
+    tilde_delta_theta = (mu_theta_1 - mu_theta_0) - (rho*sigma2_theta*sigma2_x)/sigma2_x^2*(mu_x_1 - mu_x_0)
     tilde_delta_theta
 
 
@@ -182,8 +189,8 @@ calculate_truth_v2 <- function( beta_theta_1, beta_theta_0,
     abs(bias_X - bias_naive)
 
     # True reliability
-    tilde_sigma_theta = sig_theta^2 - (rho*sig_theta*sig_x)^2/sig_x^2
-    r = (num_pre*beta_theta_0^2*tilde_sigma_theta)/ ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma_pre^2)
+    tilde_sigma_theta = sigma2_theta^2 - (rho*sigma2_theta*sigma2_x)^2/sigma2_x^2
+    r = (num_pre*beta_theta_0^2*tilde_sigma_theta)/ ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma2_pre^2)
     r
 
     # True reduction in bias from matching additionally on Y_pre
@@ -232,45 +239,45 @@ calculate_truth_v2 <- function( beta_theta_1, beta_theta_0,
 #' cov(X, Z) = a (initially our theorem required a = 0) theom 5.1
 #' (truth) bias
 #'
-#' @param sig_x Vector of variances of x covariate
+#' @param sigma2_x Vector of variances of x covariate
 #' @param a Correlation of covariates X
 bias_match_both_truth_OLD = function(rho,
                                      beta_theta_0, beta_x_0,
                                      beta_theta_1, beta_x_1,
                                      mu_theta_1, mu_theta_0,
                                      mu_x_1, mu_x_0,
-                                     sig_theta = 1, sig_x = 1, sigma_pre,
+                                     sigma2_theta = 1, sigma2_x = 1, sigma2_pre,
                                      a = 0) {
 
-    stopifnot(length(rho) == length(sig_x))
+    stopifnot(length(rho) == length(sigma2_x))
     stopifnot(length(mu_x_1) == length(rho))
     stopifnot(length(mu_x_1) == length(mu_x_0))
 
     # cov matrix of X, Z
-    sigma_XX <- matrix( a, nrow = length(sig_x), ncol = length(sig_x) )
-    diag(sigma_XX) = sig_x^2
+    sigma_XX <- matrix( a, nrow = length(sigma2_x), ncol = length(sigma2_x) )
+    diag(sigma_XX) = sigma2_x^2
 
     # cov matrix of theta and X
-    sigma_thetax = matrix(sig_theta*sig_x*rho, nrow=1)
+    sigma_thetax = matrix(sigma2_theta*sigma2_x*rho, nrow=1)
 
     # cov matrix of theta and 2 pre-period outcomes (that are identically distributed under perfect parallel trends)
-    sigma_thetay = matrix(c(beta_theta_0*sig_theta^2 + sum( beta_x_0*sig_x*rho*sig_theta ),
-                            beta_theta_0*sig_theta^2 + sum( beta_x_0*sig_x*rho*sig_theta) ), nrow = 1)
+    sigma_thetay = matrix(c(beta_theta_0*sigma2_theta^2 + sum( beta_x_0*sigma2_x*rho*sigma2_theta ),
+                            beta_theta_0*sigma2_theta^2 + sum( beta_x_0*sigma2_x*rho*sigma2_theta) ), nrow = 1)
 
 
     ### TODO: Fix following to make general with vector of X
 
     # cov matrix of X and 2 pre-period outcomes
-    sigma_xy = matrix(c(beta_x_0*sig_x^2 + beta_theta_0*rho[1]*sig_theta*sig_x + beta_z_0*a,
-                        beta_x_0*sig_x^2 + beta_theta_0*rho[1]*sig_theta*sig_x + beta_z_0*a,
-                        beta_z_0*sig_z^2 + beta_theta_0*rho[2]*sig_theta*sig_z + beta_x_0*a,
-                        beta_z_0*sig_z^2 + beta_theta_0*rho[2]*sig_theta*sig_z + beta_x_0*a), 2, byrow = TRUE)
+    sigma_xy = matrix(c(beta_x_0*sigma2_x^2 + beta_theta_0*rho[1]*sigma2_theta*sigma2_x + beta_z_0*a,
+                        beta_x_0*sigma2_x^2 + beta_theta_0*rho[1]*sigma2_theta*sigma2_x + beta_z_0*a,
+                        beta_z_0*sig_z^2 + beta_theta_0*rho[2]*sigma2_theta*sig_z + beta_x_0*a,
+                        beta_z_0*sig_z^2 + beta_theta_0*rho[2]*sigma2_theta*sig_z + beta_x_0*a), 2, byrow = TRUE)
 
     # total variance of Y_pre
-    d = beta_theta_0^2*sig_theta^2 + beta_x_0^2*sig_x^2 + beta_z_0^2*sig_z^2 + 2*beta_theta_0*beta_x_0*rho[1]*sig_theta*sig_x +
-        2*beta_theta_0*beta_z_0*sig_theta*sig_z*rho[2] + 2*beta_z_0*beta_x_0*a + sigma_pre^2
+    d = beta_theta_0^2*sigma2_theta^2 + beta_x_0^2*sigma2_x^2 + beta_z_0^2*sig_z^2 + 2*beta_theta_0*beta_x_0*rho[1]*sigma2_theta*sigma2_x +
+        2*beta_theta_0*beta_z_0*sigma2_theta*sig_z*rho[2] + 2*beta_z_0*beta_x_0*a + sigma2_pre^2
     # cov matrix of the 2 pre-period outcomes
-    sigma_yy = matrix(c(d, d- sigma_pre^2, d - sigma_pre^2, d), 2)
+    sigma_yy = matrix(c(d, d- sigma2_pre^2, d - sigma2_pre^2, d), 2)
 
     # Defining matrix to use theorem 5.1 bias expression
     B = cbind(sigma_thetax, sigma_thetay)
@@ -289,18 +296,18 @@ bias_match_both_myestimator_OLD = function(rho, beta_theta_0, beta_x_0, beta_the
                                            beta_x_1, beta_z_1, beta_z_0,
                                            mu_theta_1, mu_theta_0, mu_x_1, mu_x_0,
                                            mu_z_1, mu_z_0,
-                                           sig_theta, sig_x, sig_z, sigma_pre, a = 0) {
+                                           sigma2_theta, sigma2_x, sig_z, sigma2_pre, a = 0) {
     # cov matrix of X
-    sigma_XX <- matrix(c(sig_x^2, a, a, sig_z^2),
+    sigma_XX <- matrix(c(sigma2_x^2, a, a, sig_z^2),
                        2)
     # cov matrix of theta and X
-    sigma_thetax = matrix(c(sig_theta*sig_x*rho[1], sig_theta*sig_z*rho[2]), nrow = 1)
+    sigma_thetax = matrix(c(sigma2_theta*sigma2_x*rho[1], sigma2_theta*sig_z*rho[2]), nrow = 1)
 
     # new variance with the correlated
-    vt = sig_theta^2 - sigma_thetax%*%solve(sigma_XX)%*%t(sigma_thetax)
+    vt = sigma2_theta^2 - sigma_thetax%*%solve(sigma_XX)%*%t(sigma_thetax)
 
     # reliability
-    reliability = 2*beta_theta_0^2*vt/(2*beta_theta_0^2*vt + sigma_pre^2)
+    reliability = 2*beta_theta_0^2*vt/(2*beta_theta_0^2*vt + sigma2_pre^2)
 
     # new delta theta
     dx = matrix(c(mu_x_1 - mu_x_0, mu_z_1 - mu_z_0), nrow = 2)
