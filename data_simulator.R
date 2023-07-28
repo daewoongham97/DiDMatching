@@ -21,12 +21,12 @@ library(devtools)
 #' @param mu_theta_0 Mean of theta among control
 #' @param mu_x_1 Mean of X among treated
 #' @param mu_x_0 Mean of X among control
-#' @param sig_theta Standard deviation of theta within
+#' @param sigma2_theta Standard deviation of theta within
 #'   treatment/control group
-#' @param sig_x Standard deviation of X within treatment/control group
-#' @param sigma_pre Standard deviation of noise term for pre-treatment
+#' @param sigma2_x Standard deviation of X within treatment/control group
+#' @param sigma2_pre Standard deviation of noise term for pre-treatment
 #'   outcome
-#' @param sigma_post Standard deviation of noise term for
+#' @param sigma2_post Standard deviation of noise term for
 #'   post-treatment outcome
 #' @param p proportion expected to be treated in Bernoulli treatment
 #'   assignment
@@ -52,9 +52,14 @@ make_data = function(N,
                      beta_x_1, beta_x_0,
                      mu_theta_1, mu_theta_0,
                      mu_x_1, mu_x_0,
-                     sig_theta = 1, sig_x = 1,
-                     sigma_pre = 1.3, sigma_post = 0.01,
+                     sigma2_theta = 1, sigma2_x = 1,
+                     sigma2_pre = 1.3, sigma2_post = 0.01,
                      p = 0.2, num_pre = 5, rho = 0.5, seed = NULL) {
+
+    sigma_theta = sqrt(sigma2_theta)
+    sigma_x = sqrt(sigma2_x)
+    sigma_pre = sqrt(sigma2_pre)
+    sigma_post = sqrt(sigma2_post)
 
     stopifnot( num_pre >= 1 )
 
@@ -65,7 +70,7 @@ make_data = function(N,
     treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
     mu_1 = c(mu_theta_1, mu_x_1)
     mu_0 = c(mu_theta_0, mu_x_0)
-    sigma <- matrix(c(sig_theta^2, sig_theta*sig_x*rho, sig_theta*sig_x*rho, sig_x^2), 2)
+    sigma <- matrix(c(sigma_theta^2, sigma_theta*sigma_x*rho, sigma_theta*sigma_x*rho, sigma_x^2), 2)
 
     treats = mvrnorm(sum(treatment == 1), mu_1, sigma)
     controls = mvrnorm(sum(treatment == 0), mu_0, sigma)
@@ -116,7 +121,7 @@ make_data = function(N,
 #'   each year.  If 2 values, will interpolate.
 #' @param beta_x List of observed covariate_outcome values, one for
 #'   each year. If 2 values, will interpolate.
-#' @param sigma List of residual error standard deviations, one for
+#' @param sigma2_e List of residual error standard deviations, one for
 #'   each year. If 2 values, will interpolate.
 #' @param span_year Number of years to generate for each unit.
 #'
@@ -127,14 +132,14 @@ make_data_long <- function( N,
                             beta_x,
                             mu_theta_1, mu_theta_0,
                             mu_x_1, mu_x_0,
-                            sig_theta = 1, sig_x = 1,
-                            sigma = 1,
+                            sigma2_theta = 1, sigma2_x = 1,
+                            sigma2_e = 1,
                             p = 0.2, num_pre = 5, rho = 0.5, seed = NULL ) {
 
     stopifnot( num_pre >= 1 )
 
-    if ( length( sigma ) == 2 ) {
-        sigma = seq( sigma[1], sigma[2], length.out = span_years )
+    if ( length( sigma2_e ) == 2 ) {
+        sigma2_e = seq( sigma2_e[1], sigma2_e[2], length.out = span_years )
     }
     if ( length( inter ) == 2 ) {
         inter = seq( inter[1], inter[2], length.out = span_years )
@@ -153,7 +158,8 @@ make_data_long <- function( N,
     treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
     mu_1 = c(mu_theta_1, mu_x_1)
     mu_0 = c(mu_theta_0, mu_x_0)
-    sigma_mat <- matrix(c(sig_theta^2, sig_theta*sig_x*rho, sig_theta*sig_x*rho, sig_x^2), 2)
+    sigma_mat <- matrix(c(sigma2_theta, sqrt(sigma2_theta*sigma2_x)*rho,
+                          sqrt(sigma2_theta*sigma2_x)*rho, sigma2_x), 2)
 
     controls = mvrnorm(sum(treatment == 0), mu_0, sigma_mat)
     treats = mvrnorm(sum(treatment == 1), mu_1, sigma_mat)
@@ -183,7 +189,7 @@ make_data_long <- function( N,
                   ever_tx = treat,
                   treat = treat * (time_tx == year),
                   #time_tx = if_else(ever_tx == 1, time_tx, Inf ),
-                  epsilon = rnorm( n(), mean = 0, sd = sigma[ year ] ),
+                  epsilon = rnorm( n(), mean = 0, sd = sqrt(sigma2_e[[ year ]]) ),
                   Y = inter[year] + beta_theta[year]*theta + beta_x[year]*X + epsilon )
 
     dat$time_tx[ dat$ever_tx == 0 ] = Inf
@@ -204,16 +210,16 @@ if ( FALSE ) {
     beta_x_1 = 1.8; beta_x_0 = 0.5;
     mu_theta_1 = 1; mu_theta_0 = 0.1
     mu_x_1 = 1; mu_x_0 = 0.0
-    sig_theta = 1;
-    sig_x = 1
-    sigma_pre = 0.8; sigma_post = 0.01;  p =0.2; rho = 0.2
+    sigma2_theta = 1;
+    sigma2_x = 1
+    sigma2_pre = 0.8; sigma2_post = 0.01;  p =0.2; rho = 0.2
     num_pre = 4
 
     df = make_data(N = 200, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta_1,
                    beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
                    mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                   mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sig_theta = sig_theta,
-                   sig_x = sig_x, sigma_pre = sigma_pre, sigma_post = sigma_post,
+                   mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
+                   sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                    p = p, rho = rho)
 
     head( df )
@@ -239,7 +245,7 @@ if ( FALSE ) {
     calculate_truth(num_pre = num_pre, beta_theta_1 = beta_theta_1,
                     beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
                     mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                    mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sig_theta = sig_theta,
-                    sig_x = sig_x, sigma_pre = sigma_pre, sigma_post = sigma_post,
+                    mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
+                    sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                     p = p, rho = rho)
 }
