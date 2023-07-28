@@ -124,3 +124,12 @@ res %>% arrange( quantity ) %>%
     dplyr::select( -match, -scenario ) %>%
     relocate( quantity ) %>%
     print( n = 100 )
+
+res %>%
+    filter( !( quantity %in% c("X", "theta (~)") ) ) %>%
+ggplot( aes( Eest, true ) ) +
+    facet_wrap( ~ quantity, scales="free" ) +
+    geom_point() +
+    #coord_fixed() +
+    geom_abline( ) +
+    theme_minimal()
