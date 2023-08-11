@@ -9,9 +9,15 @@ source( "DiD_matching_func.R" )
 source( "oracle_bias_calculators.R" )
 
 #' @param ... Parameters to pass to data generator and oracle calculations
-one_run <- function( N, num_pre, ... ) {
+one_run <- function( N, num_pre,
+                     beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
+                     mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                     ... ) {
 
-    df = make_data( N = N, num_pre = num_pre, ...)
+    df = make_data( N = N, num_pre = num_pre,
+                    beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
+                    mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                    ...)
 
     #browser()
 
@@ -21,10 +27,16 @@ one_run <- function( N, num_pre, ... ) {
                                   treatment = "treatment",
                                   X = "X", df)
     res
-
+browser()
     # get truth
-    truth <- calculate_truth( num_pre = num_pre, ... )
-    truth2 <- calculate_truth_varying( num_pre = num_pre, ... )
+    truth <- calculate_truth( num_pre = num_pre,
+                              beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
+                              mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                              ... )
+    truth2 <- calculate_truth_varying( num_pre = num_pre,
+                                       beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
+                                       mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                                       ... )
 
     res$result$true = truth$biases
     res$result$true.v = truth2$bias_reduction[2:3]
@@ -36,18 +48,30 @@ one_run <- function( N, num_pre, ... ) {
     names( res$result ) <- c( "quantity", "match", "statistic", "true", "true.v" )
     res$result$quantity <- c( "reduce_X", "reduce_XY" )
 
-    res$delta = dplyr::select( res$delta, quantity, delta, true ) %>%
-        rename( statistic = delta )
+    #res$delta = dplyr::select( res$delta, quantity, delta, true ) %>%
+    #    rename( statistic = delta )
 
-    bind_rows( res$result, res$statistic, res$delta )
+    delts <- res$delta %>%
+        pivot_longer( cols = beta_pre:delta ) %>%
+        mutate( quantity = paste0( quantity, "-", name ) ) %>%
+        dplyr::select( -name ) %>%
+        rename( statistic = value )
+    delts$true = c( beta_x_0, beta_x_1,
+                    beta_x_1 - beta_x_0,
+                    mu_x_1 - mu_x_0,
+                    beta_theta_0, beta_theta_1,
+                    beta_theta_1 - beta_theta_0,
+                    mu_theta_1 - mu_theta_0 )
+
+    bind_rows( res$result, res$statistic, delts )
 }
 
 
 if ( FALSE ) {
-    one_run( N = 1000, beta_theta_1 = 1.5, beta_theta_0 = 1.0,
+    one_run( N = 10000, beta_theta_1 = 1.5, beta_theta_0 = 1.0,
              beta_x_1 = 0.8, beta_x_0 = 0.5,
              mu_theta_1 = 1, mu_theta_0 = 0.1, mu_x_1 = 0.7, mu_x_0 = 0.5, sigma2_theta = 1,
-             sigma2_x = 1, sigma2_pre = 0.8, p = 0.2, rho = 0.2, num_pre = 4 )
+             sigma2_x = 1, sigma2_pre = 0.8, p = 0.2, rho = 0, num_pre = 4 )
 
 }
 
@@ -67,11 +91,11 @@ if ( FALSE ) {
 #### Run the small simulation ####
 
 
-run_validation_simulation <- function( rho, s_theta, s_x, delta_x, R = 100 ) {
+run_validation_simulation <- function( rho, s_theta, s_x, delta_x, N = 2000, R = 100 ) {
     cat( "Running params: rho:", rho, "s_theta:", s_theta, "s_x:", s_x, "\n" )
 
     rps = map( 1:R, ~
-                   one_run( N = 2000,
+                   one_run( N = N,
                             beta_theta_1 = 1.5, beta_theta_0 = 1.5 * s_theta,
                             beta_x_1 = 2, beta_x_0 = 2 * s_x,
                             mu_theta_1 = 1.5, mu_theta_0 = 0,
@@ -102,15 +126,17 @@ run_validation_simulation <- function( rho, s_theta, s_x, delta_x, R = 100 ) {
 }
 
 if ( FALSE ) {
-    run_validation_simulation( rho = 0.5, s_theta = 0.5,
+    run_validation_simulation( rho = 0.5, s_theta = 0.5, N = 10000,
                                s_x = 2, delta_x = 2 )
 
 }
 
-sims <- expand_grid( rho = c( 0, 0.5 ),
+sims <- expand_grid( rho = c( 0, 0.5, 0.9 ),
                      s_theta = c( 0.5, 1, 2 ),
                      s_x = c( 1, 2 ),
-                     delta_x = c( 0, 2 ) )
+                     delta_x = c( 0, 2 ),
+                     N = c( 2000, 10000 ) )
+
 sims <- filter( sims, delta_x == 2 | s_x == 1 )
 
 cat( "Running", nrow(sims), "simulations\n" )

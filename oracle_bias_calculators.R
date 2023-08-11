@@ -55,7 +55,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
 
     sigma_thetaY = matrix( beta_theta_0 * sigma2_theta + beta_x_0 * cov_Xtheta, nrow = 1 )
 
-    A = cbind( rho, sigma_thetaY )
+    A = cbind( cov_Xtheta, sigma_thetaY )
 
     C = matrix( c( delta_x, beta_theta_0*delta_theta + beta_x_0*delta_x ),
                 ncol = 1 )
