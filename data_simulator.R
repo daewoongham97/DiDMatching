@@ -138,9 +138,6 @@ make_data_long <- function( N,
 
     stopifnot( num_pre >= 1 )
 
-    if ( length( sigma2_e ) == 2 ) {
-        sigma2_e = seq( sigma2_e[1], sigma2_e[2], length.out = span_years )
-    }
     if ( length( inter ) == 2 ) {
         inter = seq( inter[1], inter[2], length.out = span_years )
     }
@@ -189,7 +186,7 @@ make_data_long <- function( N,
                   ever_tx = treat,
                   treat = treat * (time_tx == year),
                   #time_tx = if_else(ever_tx == 1, time_tx, Inf ),
-                  epsilon = rnorm( n(), mean = 0, sd = sqrt(sigma2_e[[ year ]]) ),
+                  epsilon = rnorm( n(), mean = 0, sd = sqrt(sigma2_e) ),
                   Y = inter[year] + beta_theta[year]*theta + beta_x[year]*X + epsilon )
 
     dat$time_tx[ dat$ever_tx == 0 ] = Inf

@@ -14,14 +14,14 @@ library( tidyverse )
 source( here::here( "data_simulator.R" ) )
 beta_theta_1 = 1.5; beta_theta_0 = 1.0
 beta_x_1 = 0.8; beta_x_0 = 0.5;
-mu_theta_1 = 1; mu_theta_0 = 0.1; mu_x_1 = 0.7; mu_x_0 = 0.5; sig_theta = 1;
-sig_x = 1; sigma_pre = 0.8; sigma_post = 0.01;  p = 0.2; rho = 0.2; num_pre = 4
+mu_theta_1 = 1; mu_theta_0 = 0.1; mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
+sigma2_x = 1; sigma2_pre = 0.8; sigma2_post = 0.01;  p = 0.2; rho = 0.2; num_pre = 4
 
 df = make_data(N = 10000, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta_1,
                beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
                mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-               mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sig_theta = sig_theta,
-               sig_x = sig_x, sigma_pre = sigma_pre, sigma_post = sigma_post,
+               mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
+               sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                p = p, rho = rho)
 
 # A hypothetical dataset!
@@ -65,8 +65,8 @@ truth = calculate_truth( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_
                          beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
                          mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
                          mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                         sig_theta = sig_theta, sig_x = sig_x,
-                         sigma_pre = sigma_pre, sigma_post = sigma_post,
+                         sigma2_theta = sigma2_theta, sigma2_x = sigma2_x,
+                         sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                          p = p, num_pre = num_pre, rho = rho )
 
 res$result$true = truth$biases
@@ -106,10 +106,12 @@ school_A = tribble( ~ year, ~ treat, ~ outcome, ~ X,
 set.seed( 20440 )
 library( tidyverse )
 source( here::here( "data_simulator.R" ) )
-beta_theta_1 = 1.5; beta_theta_0 = 1.0
+beta_theta_1 = 2; beta_theta_0 = 1.0
 beta_x_1 = 0.8; beta_x_0 = 0.5;
-mu_theta_1 = 1; mu_theta_0 = 0.1; mu_x_1 = 0.7; mu_x_0 = 0.5; sig_theta = 1;
-sig_x = 1; sigma_pre = 0.8; sigma_post = 0.01;  p = 0.2; rho = 0.2; num_pre = 4
+mu_theta_1 = 1; mu_theta_0 = 0.1
+mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
+sigma2_x = 1; sigma2_e = 0.8
+p = 0.2; rho = 0.2; num_pre = 4
 
 df_long = make_data_long(N = 2000, span_years = 10, seed = 14,
                          num_pre = num_pre,
@@ -117,14 +119,17 @@ df_long = make_data_long(N = 2000, span_years = 10, seed = 14,
                          beta_theta = c(beta_theta_0, beta_theta_1),
                          beta_x = c( beta_x_0, beta_x_1 ),
                          mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                         mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sig_theta = sig_theta,
-                         sig_x = sig_x,
-                         sigma = c(sigma_pre, sigma_post),
+                         mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
+                         sigma2_x = sigma2_x,
+                         sigma2_e = sigma2_e,
                          p = p, rho = rho)
+
 
 # Looking at structure of a single unit over time
 filter( df_long, ID == 5 )
-table( df_long$treat, df_long$year )
+
+# Count of when units are treated by year
+table( treat=df_long$treat, year=df_long$year )
 
 
 # The following is what "stacked" data looks like; those years with no
@@ -133,11 +138,15 @@ table( df_long$treat, df_long$year )
 # for you.
 df_stack = add_lagged_outcomes( df_long, ID = "ID", year = "year",
                                 outcome = "Y", n_lags = 4 )
+
+# One of the schools in the transformed data:
 filter( df_stack, ID == 5 )
 
 
 # Estimating whether to match based on the long-form data (you can
-# also pass the df_stack if you set add_lagged_outcomes = FALSE)
+# also pass the df_stack version of the data if you set
+# add_lagged_outcomes = FALSE)
+
 source( here::here( "DiD_matching_func.R" ) )
 res_stg = DiD_matching_guideline_staggered( Y_post = "Y",
                                             treatment = "treat",

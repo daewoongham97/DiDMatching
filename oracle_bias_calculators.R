@@ -11,12 +11,12 @@
 #' @param sigma2_x The variance of x
 #' @param rho The correlation of X and theta.
 calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
-                                beta_x_1, beta_x_0,
-                                mu_theta_1, mu_theta_0,
-                                mu_x_1, mu_x_0,
-                                sigma2_theta = 1, sigma2_x = 1,
-                                sigma2_pre = 1.3, sigma2_post = sigma2_pre,
-                                p = 0.2, num_pre = 5, rho = 0.5 ) {
+                                     beta_x_1, beta_x_0,
+                                     mu_theta_1, mu_theta_0,
+                                     mu_x_1, mu_x_0,
+                                     sigma2_theta = 1, sigma2_x = 1,
+                                     sigma2_pre = 1.3, sigma2_post = sigma2_pre,
+                                     p = 0.2, num_pre = 5, rho = 0.5 ) {
 
     cov_Xtheta = sqrt( sigma2_theta * sigma2_x ) * rho
 
@@ -27,7 +27,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
     delta_x = mu_x_1 - mu_x_0
 
     bias_naive =  Delta_theta * delta_theta +  delta_x * Delta_X
-     #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
+    #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
 
     bias_X = Delta_theta * (delta_theta - rho * delta_x * sqrt( sigma2_theta / sigma2_x ) )
 
@@ -67,7 +67,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
     # How get reliability and delta_theta_tilde here, if at all?
 
     tb <- tibble( what = c("naive", "X", "X & Y_pre" ),
-            bias = c( bias_naive, bias_X, bias_XY ) )
+                  bias = c( bias_naive, bias_X, bias_XY ) )
     tb$bias_reduction = c( NA,
                            abs( tb$bias[[1]] ) - abs( tb$bias[[2]] ),
                            abs( tb$bias[[2]] ) - abs( tb$bias[[3]] ) )
@@ -105,7 +105,8 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
 
 
     # True Imbalance of Theta
-    tilde_delta_theta = (mu_theta_1 - mu_theta_0) - (rho*sigma2_theta*sigma2_x)/sigma2_x^2*(mu_x_1 - mu_x_0)
+    tilde_delta_theta = (mu_theta_1 - mu_theta_0) -
+        (rho*sigma2_theta*sigma2_x)/sigma2_x^2*(mu_x_1 - mu_x_0)
     tilde_delta_theta
 
 
@@ -120,7 +121,8 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
 
     # True reliability
     tilde_sigma_theta = sigma2_theta^2 - (rho*sigma2_theta*sigma2_x)^2/sigma2_x^2
-    r = (num_pre*beta_theta_0^2*tilde_sigma_theta)/ ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma2_pre^2)
+    r = (num_pre*beta_theta_0^2*tilde_sigma_theta) /
+        ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma2_pre^2)
     r
 
     # True reduction in bias from matching additionally on Y_pre
