@@ -1,162 +1,89 @@
-
-
-# Script to make figure 1 in paper
-
-
+## Replicating Figure 1 from the original Bartanen et al paper.
 
 library( tidyverse )
-
-library( here )
-library(haven)
-
-
-
-#### Load data #####
-
-dat = read_csv( here::here("../data/cleaned_data.csv" ) )
-
-c_vars = c( "ssize_1000" , "savg_frpl0" , "savg_hisp0" , "savg_black0" ,
-            "prop_new" , "principal_yrs" , "principal_transition")
-
-years = paste0( "savg_math", c( "", 0:5 ) )
-years = rev( years )
-
-# These are the years in ascending order of time
-years
-
-head( dat )
-
-nrow(dat)
-table(dat$year)
-table(dat$year, dat$year0)
-
-dat <- dplyr::select( dat, -year0,
-                      -c( ssize_1000:savg_black0 ), -prop_new, -principal_yrs, - principal_transition, -district_id )
-
-head( dat )
-
-# Alert!  We have a lot of exact 0s for data before the data begins
-# (for lagged outcomes)
-mean( dat$savg_math4 == 0 )
-summary( dat$savg_math4)
+dat = read.csv( here::here( "../data/full_data_w_weights.csv") )
+dat$treat = factor(dat$treat)
+dat$time = factor(dat$time)
+dat = within(dat, time <- relevel(time, ref = "5"))
 
 
-# Put data in long form for analysis and then group by start_year.
-datL <- dat %>%
-    rename( start_year = year,
-            `savg_math-1` = savg_math ) %>%
-    pivot_longer( cols = starts_with("savg_math"), names_to = "year",
-                  values_to= "savg_math", names_prefix = "savg_math", names_transform = as.integer ) %>%
-    mutate( year = 5 - year )
+a = lm(savg_math ~ time*treat + savg_frpl
+       + savg_black +  savg_hisp + ssize_100, data = dat, weights = dat$weight_k)
+
+# I had to used this felm linear regression as it allows us to replicate the "absorb()" function in Stata
+# that accounts for fixed effects (school_id + dyear) without actually estimating it
+library(lfe)
+a = felm(savg_math ~  time*treat + savg_frpl
+         + savg_black +  savg_hisp + ssize_100 | school_id + dyear, dat, weights = dat$weight_k)
+
+a$coefficients
+
+# just adding zero for the fifth time
+control_match_R = c(a$coefficients[1:5], 0, a$coefficients[6])
+
+trt_match_R = control_match_R + c(a$coefficients[18:22], 0, a$coefficients[23])
+
+# plotting
+time = c(-5, -4, -3, -2, -1, 0, 1)
+plot_df_R = data.frame(time = rep(time, 2),
+                       y = c(control_match_R, trt_match_R),
+                       group = rep(c("Same Principal", "New Principal") , each = 7))
+
+ppt_R = ggplot(data = plot_df_R, aes(x = time, y = y, group = group)) +
+    geom_point(aes(color = group), size = 1) +
+    geom_line(aes(color = group), size = 2) +
+    geom_hline(yintercept = 0, color = "black", size = s, linetype = "dashed")  +
+    scale_x_continuous(breaks = c(-5, -4, -3, -2, -1, 0, 1)) +
+    scale_colour_manual(values = c("dark green", "red")) +
+    xlab("Years Relative to Principal Change") + ylab("") +
+    theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2, face="bold"),
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          legend.title=element_blank(),legend.text=element_text(size=a1),
+          plot.title = element_text(size = a2, face = "bold"),
+          axis.title.x = element_text(vjust=-0.5))
+
+library( ggpubr )
+fig_1_R = ggarrange(ppt_R, common.legend = TRUE, nrow = 1)
+fig_1_R
+##
 
 
-datG <- datL %>%
-#    filter( savg_math != 0 ) %>%  # needed?
-    group_by( start_year ) %>%
-    mutate( year.f = factor(year) ) %>%
-    nest()
+## Old results
+library(readr)
 
-datG
-datG$data[[1]]
-levels( datG$data[[1]]$year.f)
+# Results were generated from original source files of Bartanen, Grissom and Rogers (2016)
+matched = read.csv("data/match.csv")
+control_match = matched[c(2, 4, 6, 8, 10, 12, 14), 2]
+control_match = parse_number(control_match)
 
+trt_match = matched[c(34, 38, 42, 46, 50, 54, 58), 2]
+trt_match = control_match + parse_number(trt_match)
+plot_df = data.frame(time = rep(time, 2), y = c(control_match, trt_match),
+                     group = rep(c("Same Principal", "New Principal") , each = 7))
+library(ggplot2);  library(ggpubr); library(cowplot)
+s = 5
+w = 50
+s2 = 5
+a1 = 15
+a2 = 20
+ppt = ggplot(data = plot_df, aes(x = time, y = y, group = group)) +
+    geom_point(aes(color = group), size = s) +
+    geom_line(aes(color = group), size = 2) +
+    geom_hline(yintercept = 0, color = "black", size = 2, linetype = "dashed")  +
+    scale_x_continuous(breaks = c(-5, -4, -3, -2, -1, 0, 1)) +
+    scale_colour_manual(values = c("dark green", "red")) +
+    xlab("Years Relative to Principal Change") + ylab("") +
+    theme(axis.text=element_text(size=a1), axis.title=element_text(size=a2,face="bold"),
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"),
+          legend.title=element_blank(),legend.text=element_text(size=a1), plot.title = element_text(size = a2, face = "bold"),
+          axis.title.x = element_text(vjust=-0.5))
 
-# NOTE: By having 0 for average math for missing data, even the early
-# years will have 6 years of lagged data (some fake) so we can use the
-# following code.  If we drop those years, we would need to adjust to
-# differnet number of pre-treatment years in the early cohorts. Or not
-# fit to the early cohorts.
+fig_1 = ggarrange(ppt, common.legend = TRUE, nrow = 1)
+fig_1
 
-
-
-# testing
-if ( FALSE ) {
-    dd = datG$data[[6]]
-    head(dd)
-
-    mod = lm( savg_math ~ year.f * treat - 1 - treat, data=dd )
-    mod
-    summary( mod )
-
-    cc <- broom::tidy(mod) %>%
-        dplyr::select(estimate ) %>%
-        mutate( year = c( 0:6, 0:6 ),
-                tx = rep( c(0,1), each=7 ) ) %>%
-        pivot_wider( names_from = tx, values_from=estimate ) %>%
-        mutate( tx = `1` - `0` - (`1`[6] - `0`[6]) )
-
-    cc
-}
-
-
-
-
-
-#### Fit event study model to each cohort and average ####
-
-
-mods_df = datG$data %>%
-    set_names( datG$start_year ) %>%
-    map_df( function( dd ) {
-
-        mod = lm( savg_math ~ year.f * treat - 1 - treat, data=dd )
-
-        cc <- broom::tidy(mod) %>%
-            dplyr::select(estimate ) %>%
-            mutate( year = c( 0:6, 0:6 ),
-                    tx = rep( c(0,1), each=7 ) ) %>%
-            pivot_wider( names_from = tx, values_from=estimate ) %>%
-            mutate( Y0_adj = `0` - `0`[6],
-                    Y1_adj = `1` - `1`[6],
-                    tx = `1` - `0` - (`1`[6] - `0`[6]) )
-
-        cc$n = nrow(dd)
-        cc$nTx = sum(dd$treat)
-        cc
-    }, .id = "start_year" )
-
-mods_df
-table( mods_df$nTx )
-
-
-
-# This plots DiD event study IMPACTS, one for each cohort
-ggplot( mods_df, aes( year, tx, group = start_year ) ) +
-    geom_line() +
-    theme_minimal()
-
-
-
-
-
-# This plots Y0 and Y1 (adjusted levels, not impacts)
-#
-# Note a DiD analysis would subtract off the difference at time T-1 to
-# align the two lines.
-#
-# We can do this with our levels line by subtracting off T-1 level for
-# each.  The difference would then be the treatment impact at each
-# time point.
-
-modsL <- mods_df %>% pivot_longer( cols = c("Y0_adj","Y1_adj"),
-                                   names_to="Z", values_to = "std_math" )
-
-modsL %>%
-    ggplot( aes( year, std_math, group = interaction( Z, start_year ), col=Z ) ) +
-    geom_line() +
-    theme_minimal()
-
-
-# This plots levels averaged across cohort
-sum_plot <- modsL %>% group_by( Z, year ) %>%
-    summarise( std_math = weighted.mean( std_math, w=nTx ) )
-
-ggplot( sum_plot, aes( year, std_math, col=Z ) ) +
-    geom_line() + geom_point() +
-    theme_minimal()
-
-
-
-
+ggsave(file="Figures/Fig1.pdf", fig_1,  width = 9, height = 6, device = "pdf")
 
 

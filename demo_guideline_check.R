@@ -14,8 +14,9 @@ library( tidyverse )
 source( here::here( "data_simulator.R" ) )
 beta_theta_1 = 1.5; beta_theta_0 = 1.0
 beta_x_1 = 0.8; beta_x_0 = 0.5;
-mu_theta_1 = 1; mu_theta_0 = 0.1; mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
-sigma2_x = 1; sigma2_pre = 0.8; sigma2_post = 0.01;  p = 0.2; rho = 0.2; num_pre = 4
+mu_theta_1 = 1; mu_theta_0 = 0.1
+mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
+sigma2_x = 1; sigma2_pre = 0.8; sigma2_post = 0.01;  p = 0.2; rho = 0; num_pre = 4
 
 df = make_data(N = 10000, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta_1,
                beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
