@@ -176,50 +176,50 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
 
     ## Guideline 1) Estimating Delta_X
     if (length(X) > 1) {
-        est_delta_x = colMeans(trt[, X]) - colMeans(ctrl[, X])
+        est_delta_X = colMeans(trt[, X]) - colMeans(ctrl[, X])
     } else {
-        est_delta_x = mean(trt[[X]]) - mean(ctrl[[X]])
+        est_delta_X = mean(trt[[X]]) - mean(ctrl[[X]])
     }
 
-    reg_x_pre = list()
+    reg_X_pre = list()
 
     for (i in 1:t) {
         form = formula(paste0(Y_pre[i], " ~ ", paste0(X, collapse = " + ")))
         lm_obj = lm(form, data = ctrl)
-        reg_x_pre[[i]] = lm_obj
+        reg_X_pre[[i]] = lm_obj
     }
 
     form = formula(paste0(Y_post, " ~ ", paste0(X, collapse = " + ")))
-    reg_x_post = lm(form, data = ctrl)
+    reg_X_post = lm(form, data = ctrl)
 
-    all_x_slopes = lapply(reg_x_pre, function(x) coef(x)[-1])
+    all_X_slopes = lapply(reg_X_pre, function(x) coef(x)[-1])
 
     x_slope_avg = vector()
-    for (i in 1:length(all_x_slopes[[1]])) {
-        x_slope_avg[i] = mean(sapply(all_x_slopes, "[[", i))
+    for (i in 1:length(all_X_slopes[[1]])) {
+        x_slope_avg[i] = mean(sapply(all_X_slopes, "[[", i))
     }
 
-    x_slope_post = coef(reg_x_post)[-1]
+    x_slope_post = coef(reg_X_post)[-1]
 
     slopes = tibble( quantity = names( x_slope_post ),
                      beta_pre = x_slope_avg,
                      beta_post = x_slope_post,
                      Delta = x_slope_post - x_slope_avg,
-                     delta = est_delta_x )
+                     delta = est_delta_X )
 
-    delta_tau_x = abs(sum(est_delta_x*(x_slope_post - x_slope_avg)))
+    delta_tau_X = abs(sum(est_delta_X*(x_slope_post - x_slope_avg)))
 
 
     ## Guideline 2)
 
     # getting the new response based on the average of all the
     # pre-treatment (residualized) outcomes
-    all_residuals = lapply(reg_x_pre, residuals)
+    all_residuals = lapply(reg_X_pre, residuals)
     stopifnot( ncol( all_residuals ) == length(Y_pre) )
     names( all_residuals ) = Y_pre
     all_residuals = do.call( cbind, all_residuals )
 
-    post_residuals = residuals(reg_x_post)
+    post_residuals = residuals(reg_X_post)
 
     params = NULL
     if ( is.null( rT_theta ) ) {
@@ -245,10 +245,10 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
     r1_ctrl =  matrix(NA, nrow = nrow(ctrl), ncol = t)
     r1_trt = matrix(NA, nrow = nrow(trt), ncol = t)
     for (i in 1:t) {
-        predic_ctrl = predict(reg_x_pre[[i]], ctrl)
+        predic_ctrl = predict(reg_X_pre[[i]], ctrl)
         r1_ctrl[, i] = ctrl[[ Y_pre[i] ]] - predic_ctrl
 
-        predic_trt = predict(reg_x_pre[[i]], trt)
+        predic_trt = predict(reg_X_pre[[i]], trt)
         r1_trt[, i] = trt[[ Y_pre[i] ]] - predic_trt
     }
 
@@ -257,17 +257,17 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
 
     est_delta_theta = (mean(trt_mean_residuals) - mean(ctrl_mean_residuals))/est_beta_theta_pre
 
-    est_tau_xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - rT_theta))
+    est_tau_Xy = abs(est_Delta_theta*est_delta_theta) - abs(est_beta_theta_post * est_delta_theta * (1 - rT_theta))
 
 
     ## Pack up results
     result_df = tribble( ~ what,        ~ match, ~ bias_reduction, ~ n, ~ n_tx,
-                         "X",              TRUE,      delta_tau_x, n, n_tx,
-                         "X & Y_pre", condition,       est_tau_xy, n, n_tx )
+                         "X",              TRUE,      delta_tau_X, n, n_tx,
+                         "X & Y_pre", condition,       est_tau_Xy, n, n_tx )
 
 
-    #est_delta_x = tibble( quantity = paste0( "delta_x: ", names(est_delta_x) ),
-    #                      statistic = est_delta_x)
+    #est_delta_X = tibble( quantity = paste0( "delta_X: ", names(est_delta_X) ),
+    #                      statistic = est_delta_X)
 
     deltas = tribble( ~ quantity,   ~beta_pre, ~beta_post, ~Delta, ~delta,
                       "theta (~)",  est_beta_theta_pre, est_beta_theta_post, est_Delta_theta, est_delta_theta )
@@ -282,7 +282,7 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
                            #"delta_theta (~)" , est_delta_theta,
                            #"Delta_theta (~)", est_beta_theta_post - est_beta_theta_pre )
     )
-    #estimate_df = bind_rows( estimate_df, est_delta_x )
+    #estimate_df = bind_rows( estimate_df, est_delta_X )
 
     out = list(result = result_df,
                statistic = estimate_df,

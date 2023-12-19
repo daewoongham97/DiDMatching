@@ -17,16 +17,16 @@ library(devtools)
 #' @param beta_theta_1 Post-slope for theta
 #' @param beta_theta_0 Pre-slope for theta (can be a vector of length
 #'   T for varying theta).
-#' @param beta_x_1 Post-slope for X
-#' @param beta_x_0 Pre-slope for X (can be a vector of length T for
+#' @param beta_X_1 Post-slope for X
+#' @param beta_X_0 Pre-slope for X (can be a vector of length T for
 #'   varying X coefficients).
 #' @param mu_theta_1 Mean of theta among treated
 #' @param mu_theta_0 Mean of theta among control
-#' @param mu_x_1 Mean of X among treated
-#' @param mu_x_0 Mean of X among control
+#' @param mu_X_1 Mean of X among treated
+#' @param mu_X_0 Mean of X among control
 #' @param sigma2_theta Variance of theta within treatment/control
 #'   group
-#' @param sigma2_x Variance of X within treatment/control group
+#' @param sigma2_X Variance of X within treatment/control group
 #' @param rho correlation between theta and X
 #' @param sigma2_pre Variance of noise term for pre-treatment outcome
 #'   (can be a vector of length T).
@@ -42,15 +42,15 @@ library(devtools)
 #'   a column for latent theta and X, and a treatment indicator.
 make_data = function(N,
                      beta_theta_1, beta_theta_0,
-                     beta_x_1, beta_x_0,
+                     beta_X_1, beta_X_0,
                      mu_theta_1, mu_theta_0,
-                     mu_x_1, mu_x_0,
-                     sigma2_theta = 1, sigma2_x = 1,
+                     mu_X_1, mu_X_0,
+                     sigma2_theta = 1, sigma2_X = 1,
                      sigma2_pre = 1.3, sigma2_post = sigma2_pre,
                      p = 0.2, num_pre = 5, rho = 0.5, seed = NULL) {
 
     sigma_theta = sqrt(sigma2_theta)
-    sigma_x = sqrt(sigma2_x)
+    sigma_X = sqrt(sigma2_X)
     sigma_pre = sqrt(sigma2_pre)
     sigma_post = sqrt(sigma2_post)
 
@@ -61,9 +61,9 @@ make_data = function(N,
     }
 
     treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
-    mu_1 = c(mu_theta_1, mu_x_1)
-    mu_0 = c(mu_theta_0, mu_x_0)
-    sigma <- matrix(c(sigma_theta^2, sigma_theta*sigma_x*rho, sigma_theta*sigma_x*rho, sigma_x^2), 2)
+    mu_1 = c(mu_theta_1, mu_X_1)
+    mu_0 = c(mu_theta_0, mu_X_0)
+    sigma <- matrix(c(sigma_theta^2, sigma_theta*sigma_X*rho, sigma_theta*sigma_X*rho, sigma_X^2), 2)
 
     treats = mvrnorm(sum(treatment == 1), mu_1, sigma)
     controls = mvrnorm(sum(treatment == 0), mu_0, sigma)
@@ -78,20 +78,20 @@ make_data = function(N,
     X[treatment == 0] = controls[, 2]
 
     Y_pre = list()
-    Y_post = 5 + beta_theta_1*theta + beta_x_1*X + rnorm(N, mean = 0, sd = sigma_post)
+    Y_post = 5 + beta_theta_1*theta + beta_X_1*X + rnorm(N, mean = 0, sd = sigma_post)
     df = data.frame(treatment = treatment, theta, X)
 
     if (  num_pre > 1 ) {
         if ( length( beta_theta_0 ) == 1 ) {
             beta_theta_0 = rep( beta_theta_0, num_pre )
         }
-        if ( length( beta_x_0 ) == 1 ) {
-            beta_x_0 = rep( beta_x_0, num_pre )
+        if ( length( beta_X_0 ) == 1 ) {
+            beta_X_0 = rep( beta_X_0, num_pre )
         }
     }
 
     for (i in 1:num_pre) {
-        df = cbind(df, beta_theta_0[[i]]*theta + beta_x_0[[i]]*X + rnorm(N, mean = 0, sd = sigma_pre))
+        df = cbind(df, beta_theta_0[[i]]*theta + beta_X_0[[i]]*X + rnorm(N, mean = 0, sd = sigma_pre))
     }
     name_v = paste0( "Y_", 0:num_pre )
     df = cbind( df, Y_post )
@@ -110,20 +110,20 @@ if ( FALSE ) {
     library( tidyverse )
 
     beta_theta_1 = 1.5; beta_theta_0 = 0.5
-    beta_x_1 = 1.8; beta_x_0 = 0.5;
+    beta_X_1 = 1.8; beta_X_0 = 0.5;
     mu_theta_1 = 1; mu_theta_0 = 0.1
-    mu_x_1 = 1; mu_x_0 = 0.0
+    mu_X_1 = 1; mu_X_0 = 0.0
     sigma2_theta = 1;
-    sigma2_x = 1
+    sigma2_X = 1
     sigma2_pre = 0.8
     sigma2_post = sigma2_pre;  p =0.2; rho = 0.2
     num_pre = 4
 
     df = make_data(N = 200, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta_1,
-                   beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+                   beta_theta_0 = beta_theta_0, beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
                    mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                   mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
-                   sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
+                   mu_X_1 = mu_X_1, mu_X_0 = mu_X_0, sigma2_theta = sigma2_theta,
+                   sigma2_X = sigma2_X, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                    p = p, rho = rho)
 
     head( df )
@@ -147,10 +147,10 @@ if ( FALSE ) {
     source( "oracle_bias_calculators.R" )
 
     calculate_truth(num_pre = num_pre, beta_theta_1 = beta_theta_1,
-                    beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+                    beta_theta_0 = beta_theta_0, beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
                     mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                    mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
-                    sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
+                    mu_X_1 = mu_X_1, mu_X_0 = mu_X_0, sigma2_theta = sigma2_theta,
+                    sigma2_X = sigma2_X, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                     p = p, rho = rho)
 }
 
@@ -168,7 +168,7 @@ if ( FALSE ) {
 #'   will interpolate.  This allows for time trend.
 #' @param beta_theta List of latent covariate-outcome values, one for
 #'   each year.  If 2 values, will interpolate.
-#' @param beta_x List of observed covariate_outcome values, one for
+#' @param beta_X List of observed covariate_outcome values, one for
 #'   each year. If 2 values, will interpolate.
 #' @param sigma2_e List of residual error standard deviations, one for
 #'   each year. If 2 values, will interpolate.
@@ -178,10 +178,10 @@ make_data_long <- function( N,
                             span_years = 10,
                             inter,
                             beta_theta,
-                            beta_x,
+                            beta_X,
                             mu_theta_1, mu_theta_0,
-                            mu_x_1, mu_x_0,
-                            sigma2_theta = 1, sigma2_x = 1,
+                            mu_X_1, mu_X_0,
+                            sigma2_theta = 1, sigma2_X = 1,
                             rho = 0.5,
                             sigma2_e = 1,
                             p = 0.2, num_pre = 5, seed = NULL ) {
@@ -194,8 +194,8 @@ make_data_long <- function( N,
     if ( length( beta_theta ) == 2 ) {
         beta_theta = seq( beta_theta[1], beta_theta[2], length.out = span_years )
     }
-    if ( length( beta_x ) == 2 ) {
-        beta_x = seq( beta_x[1], beta_x[2], length.out = span_years )
+    if ( length( beta_X ) == 2 ) {
+        beta_X = seq( beta_X[1], beta_X[2], length.out = span_years )
     }
 
     if ( !is.null(seed) ) {
@@ -203,10 +203,10 @@ make_data_long <- function( N,
     }
 
     treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
-    mu_1 = c(mu_theta_1, mu_x_1)
-    mu_0 = c(mu_theta_0, mu_x_0)
-    sigma_mat <- matrix(c(sigma2_theta, sqrt(sigma2_theta*sigma2_x)*rho,
-                          sqrt(sigma2_theta*sigma2_x)*rho, sigma2_x), 2)
+    mu_1 = c(mu_theta_1, mu_X_1)
+    mu_0 = c(mu_theta_0, mu_X_0)
+    sigma_mat <- matrix(c(sigma2_theta, sqrt(sigma2_theta*sigma2_X)*rho,
+                          sqrt(sigma2_theta*sigma2_X)*rho, sigma2_X), 2)
 
     controls = mvrnorm(sum(treatment == 0), mu_0, sigma_mat)
     treats = mvrnorm(sum(treatment == 1), mu_1, sigma_mat)
@@ -237,7 +237,7 @@ make_data_long <- function( N,
                   treat = treat * (time_tx == year),
                   #time_tx = if_else(ever_tx == 1, time_tx, Inf ),
                   epsilon = rnorm( n(), mean = 0, sd = sqrt(sigma2_e) ),
-                  Y = inter[year] + beta_theta[year]*theta + beta_x[year]*X + epsilon )
+                  Y = inter[year] + beta_theta[year]*theta + beta_X[year]*X + epsilon )
 
     dat$time_tx[ dat$ever_tx == 0 ] = Inf
 
@@ -251,11 +251,11 @@ if ( FALSE ) {
     library( tidyverse )
 
     beta_theta = c( 1.5, 0.5 )
-    beta_x = c( 1.8, 0.5 )
+    beta_X = c( 1.8, 0.5 )
     mu_theta_1 = 1; mu_theta_0 = 0.1
-    mu_x_1 = 1; mu_x_0 = 0.0
+    mu_X_1 = 1; mu_X_0 = 0.0
     sigma2_theta = 1;
-    sigma2_x = 1
+    sigma2_X = 1
     sigma2_e = 0.8
     p =0.2; rho = 0.2
     num_pre = 4
@@ -265,12 +265,12 @@ if ( FALSE ) {
                         inter = c( 0, 5 ),
                         seed = 1, num_pre = num_pre,
                         beta_theta = beta_theta,
-                        beta_x = beta_x,
+                        beta_X = beta_X,
                         mu_theta_0 = mu_theta_0,
                         mu_theta_1 = mu_theta_1,
-                        mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
+                        mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
                         sigma2_theta = sigma2_theta,
-                        sigma2_x = sigma2_x, rho = rho,
+                        sigma2_X = sigma2_X, rho = rho,
                         sigma2_e = sigma2_e,
                         p = p )
 

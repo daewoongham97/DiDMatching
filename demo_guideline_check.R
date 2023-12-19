@@ -15,16 +15,16 @@ seed = 43434
 
 source( here::here( "data_simulator.R" ) )
 beta_theta_1 = 1.5; beta_theta_0 = 1.0
-beta_x_1 = 0.8; beta_x_0 = 0.5;
+beta_X_1 = 0.8; beta_X_0 = 0.5;
 mu_theta_1 = 1; mu_theta_0 = 0.1
-mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
-sigma2_x = 1; sigma2_pre = 0.8; p = 0.2; rho = 0; num_pre = 4
+mu_X_1 = 0.7; mu_X_0 = 0.5; sigma2_theta = 1;
+sigma2_X = 1; sigma2_pre = 0.8; p = 0.2; rho = 0; num_pre = 4
 
 df = make_data(N = 10000, seed = seed, num_pre = num_pre, beta_theta_1 = beta_theta_1,
-               beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+               beta_theta_0 = beta_theta_0, beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
                mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-               mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
-               sigma2_x = sigma2_x, sigma2_pre = sigma2_pre,
+               mu_X_1 = mu_X_1, mu_X_0 = mu_X_0, sigma2_theta = sigma2_theta,
+               sigma2_X = sigma2_X, sigma2_pre = sigma2_pre,
                p = p, rho = rho)
 
 # A hypothetical dataset!
@@ -65,10 +65,10 @@ res
 
 source( "oracle_bias_calculators.R" )
 truth = calculate_truth( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
-                         beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+                         beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
                          mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                         mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                         sigma2_theta = sigma2_theta, sigma2_x = sigma2_x,
+                         mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
+                         sigma2_theta = sigma2_theta, sigma2_X = sigma2_X,
                          sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                          p = p, num_pre = num_pre, rho = rho )
 
@@ -110,20 +110,20 @@ set.seed( 20440 )
 library( tidyverse )
 source( here::here( "data_simulator.R" ) )
 beta_theta_1 = 2; beta_theta_0 = 1.0
-beta_x_1 = 0.8; beta_x_0 = 0.5;
+beta_X_1 = 0.8; beta_X_0 = 0.5;
 mu_theta_1 = 1; mu_theta_0 = 0.1
-mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
-sigma2_x = 1; sigma2_e = 0.8
+mu_X_1 = 0.7; mu_X_0 = 0.5; sigma2_theta = 1;
+sigma2_X = 1; sigma2_e = 0.8
 p = 0.2; rho = 0.2; num_pre = 4
 
 df_long = make_data_long(N = 2000, span_years = 10, seed = 14,
                          num_pre = num_pre,
                          inter = 1:10,
                          beta_theta = c(beta_theta_0, beta_theta_1),
-                         beta_x = c( beta_x_0, beta_x_1 ),
+                         beta_X = c( beta_X_0, beta_X_1 ),
                          mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                         mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
-                         sigma2_x = sigma2_x,
+                         mu_X_1 = mu_X_1, mu_X_0 = mu_X_0, sigma2_theta = sigma2_theta,
+                         sigma2_X = sigma2_X,
                          sigma2_e = sigma2_e,
                          p = p, rho = rho)
 

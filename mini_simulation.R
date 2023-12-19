@@ -10,13 +10,13 @@ source( "oracle_bias_calculators.R" )
 
 #' @param ... Parameters to pass to data generator and oracle calculations
 one_run <- function( N, num_pre,
-                     beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
-                     mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                     beta_X_0, beta_X_1, beta_theta_0, beta_theta_1,
+                     mu_X_0, mu_X_1, mu_theta_0, mu_theta_1,
                      ... ) {
 
     df = make_data( N = N, num_pre = num_pre,
-                    beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
-                    mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                    beta_X_0, beta_X_1, beta_theta_0, beta_theta_1,
+                    mu_X_0, mu_X_1, mu_theta_0, mu_theta_1,
                     ...)
 
     #browser()
@@ -27,15 +27,16 @@ one_run <- function( N, num_pre,
                                   treatment = "treatment",
                                   X = "X", df)
     res
-browser()
+    browser()
+
     # get truth
     truth <- calculate_truth( num_pre = num_pre,
-                              beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
-                              mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                              beta_X_0, beta_X_1, beta_theta_0, beta_theta_1,
+                              mu_X_0, mu_X_1, mu_theta_0, mu_theta_1,
                               ... )
     truth2 <- calculate_truth_varying( num_pre = num_pre,
-                                       beta_x_0, beta_x_1, beta_theta_0, beta_theta_1,
-                                       mu_x_0, mu_x_1, mu_theta_0, mu_theta_1,
+                                       beta_X_0, beta_X_1, beta_theta_0, beta_theta_1,
+                                       mu_X_0, mu_X_1, mu_theta_0, mu_theta_1,
                                        ... )
 
     res$result$true = truth$biases
@@ -56,9 +57,9 @@ browser()
         mutate( quantity = paste0( quantity, "-", name ) ) %>%
         dplyr::select( -name ) %>%
         rename( statistic = value )
-    delts$true = c( beta_x_0, beta_x_1,
-                    beta_x_1 - beta_x_0,
-                    mu_x_1 - mu_x_0,
+    delts$true = c( beta_X_0, beta_X_1,
+                    beta_X_1 - beta_X_0,
+                    mu_X_1 - mu_X_0,
                     beta_theta_0, beta_theta_1,
                     beta_theta_1 - beta_theta_0,
                     mu_theta_1 - mu_theta_0 )
@@ -69,9 +70,9 @@ browser()
 
 if ( FALSE ) {
     one_run( N = 10000, beta_theta_1 = 1.5, beta_theta_0 = 1.0,
-             beta_x_1 = 0.8, beta_x_0 = 0.5,
-             mu_theta_1 = 1, mu_theta_0 = 0.1, mu_x_1 = 0.7, mu_x_0 = 0.5, sigma2_theta = 1,
-             sigma2_x = 1, sigma2_pre = 0.8, p = 0.2, rho = 0, num_pre = 4 )
+             beta_X_1 = 0.8, beta_X_0 = 0.5,
+             mu_theta_1 = 1, mu_theta_0 = 0.1, mu_X_1 = 0.7, mu_X_0 = 0.5, sigma2_theta = 1,
+             sigma2_X = 1, sigma2_pre = 0.8, p = 0.2, rho = 0, num_pre = 4 )
 
 }
 
@@ -79,9 +80,9 @@ if ( FALSE ) {
 if ( FALSE ) {
 
     N = 1000; beta_theta_1 = 1.5; beta_theta_0 = 1.0;
-    beta_x_1 = 0.8; beta_x_0 = 0.5;
-    mu_theta_1 = 1; mu_theta_0 = 0.1; mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
-    sigma2_x = 1; sigma2_pre = 0.8;
+    beta_X_1 = 0.8; beta_X_0 = 0.5;
+    mu_theta_1 = 1; mu_theta_0 = 0.1; mu_X_1 = 0.7; mu_X_0 = 0.5; sigma2_theta = 1;
+    sigma2_X = 1; sigma2_pre = 0.8;
     p = 0.2; rho = 0.2; num_pre = 4
 
 
@@ -91,16 +92,16 @@ if ( FALSE ) {
 #### Run the small simulation ####
 
 
-run_validation_simulation <- function( rho, s_theta, s_x, delta_x, N = 2000, R = 100 ) {
-    cat( "Running params: rho:", rho, "s_theta:", s_theta, "s_x:", s_x, "\n" )
+run_validation_simulation <- function( rho, s_theta, s_X, delta_X, N = 2000, R = 100 ) {
+    cat( "Running params: rho:", rho, "s_theta:", s_theta, "s_X:", s_X, "\n" )
 
     rps = map( 1:R, ~
                    one_run( N = N,
                             beta_theta_1 = 1.5, beta_theta_0 = 1.5 * s_theta,
-                            beta_x_1 = 2, beta_x_0 = 2 * s_x,
+                            beta_X_1 = 2, beta_X_0 = 2 * s_X,
                             mu_theta_1 = 1.5, mu_theta_0 = 0,
-                            mu_x_1 = 0.5 + delta_x, mu_x_0 = 0.5,
-                            sigma2_theta = 2, sigma2_x = 3,
+                            mu_X_1 = 0.5 + delta_X, mu_X_0 = 0.5,
+                            sigma2_theta = 2, sigma2_X = 3,
                             sigma2_pre = 4,
                             p = 0.2, rho = rho,
                             num_pre = 6 ) )
@@ -127,17 +128,17 @@ run_validation_simulation <- function( rho, s_theta, s_x, delta_x, N = 2000, R =
 
 if ( FALSE ) {
     run_validation_simulation( rho = 0.5, s_theta = 0.5, N = 10000,
-                               s_x = 2, delta_x = 2 )
+                               s_X = 2, delta_X = 2 )
 
 }
 
 sims <- expand_grid( rho = c( 0, 0.5, 0.9 ),
                      s_theta = c( 0.5, 1, 2 ),
-                     s_x = c( 1, 2 ),
-                     delta_x = c( 0, 2 ),
+                     s_X = c( 1, 2 ),
+                     delta_X = c( 0, 2 ),
                      N = c( 2000, 10000 ) )
 
-sims <- filter( sims, delta_x == 2 | s_x == 1 )
+sims <- filter( sims, delta_X == 2 | s_X == 1 )
 
 cat( "Running", nrow(sims), "simulations\n" )
 rawres = pmap_df( sims, run_validation_simulation, R = 1000,
@@ -172,9 +173,9 @@ gres %>%
                  col=as.factor(s_theta), pch=as.factor(rho) ) ) +
     facet_wrap( ~ quantity, scales="free" ) +
     geom_point() +
-#    geom_point( data = filter( gres, delta_x==2 ), size = 3 ) +
+    #    geom_point( data = filter( gres, delta_X==2 ), size = 3 ) +
     #coord_fixed() +
-#    geom_point( aes( Eest, true.v ) ) +
+    #    geom_point( aes( Eest, true.v ) ) +
     geom_point( aes( Eest, true.v ), shape = 1, size = 3, stroke = 0.5) +
     geom_abline( ) +
     theme_minimal()
@@ -200,7 +201,7 @@ summary( gres$t )
 gres$log_t = log( 0.1 + abs(gres$t) )
 summary( gres$log_t )
 
-M <- lm( log_t ~ (as.factor(rho) + as.factor(s_theta) + as.factor(s_x) + as.factor(delta_x))^2,
+M <- lm( log_t ~ (as.factor(rho) + as.factor(s_theta) + as.factor(s_X) + as.factor(delta_X))^2,
          data=gres )
 summary( M )
 anova( M )

@@ -15,20 +15,21 @@ source( "oracle_bias_calculators.R" )
 
 beta_theta_1 = 1.5; beta_theta_0 = 1.0
 mu_theta_1 = 1; mu_theta_0 = 0.1
-beta_x_1 = 0.8; beta_x_0 = 0.5;
-mu_x_1 = 0.7; mu_x_0 = 0.5
+beta_X_1 = 0.8; beta_X_0 = 0.5;
+mu_X_1 = 0.7; mu_X_0 = 0.5
 sigma2_theta = 1
-sigma2_x = 1
+sigma2_X = 1
 sigma2_pre = 0.8
 p = 0.2
 rho = 0
 num_pre = 4
 
+
 truth = calculate_truth( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
-                         beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+                         beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
                          mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                         mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                         sigma2_theta = sigma2_theta, sigma2_x = sigma2_x,
+                         mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
+                         sigma2_theta = sigma2_theta, sigma2_X = sigma2_X,
                          sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
                          p = p, num_pre = num_pre, rho = rho )
 
@@ -41,11 +42,11 @@ one_run = function() {
 
     df = make_data(N = 10000, num_pre = num_pre,
                    beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
-                   beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+                   beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
                    mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                   mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
+                   mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
                    sigma2_theta = sigma2_theta,
-                   sigma2_x = sigma2_x,
+                   sigma2_X = sigma2_X,
                    sigma2_pre = sigma2_pre,
                    rho = rho,
                    p = p )
@@ -67,6 +68,9 @@ one_run = function() {
 
 }
 
+if ( FALSE ) {
+    one_run()
+}
 
 R = 50
 rps = map_df( 1:R, ~ one_run() )

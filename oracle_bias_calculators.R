@@ -8,56 +8,60 @@
 #' Calculate true values of bias, etc., for given model with single x
 #' and theta.
 #'
-#' @param sigma2_x The variance of x
+#' @param sigma2_X The variance of x
 #' @param rho The correlation of X and theta.
 calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
-                                     beta_x_1, beta_x_0,
+                                     beta_X_1, beta_X_0,
                                      mu_theta_1, mu_theta_0,
-                                     mu_x_1, mu_x_0,
-                                     sigma2_theta = 1, sigma2_x = 1,
+                                     mu_X_1, mu_X_0,
+                                     sigma2_theta = 1, sigma2_X = 1,
                                      sigma2_pre = 1.3, sigma2_post = sigma2_pre,
                                      p = 0.2, num_pre = 5, rho = 0.5 ) {
 
-    cov_Xtheta = sqrt( sigma2_theta * sigma2_x ) * rho
+    cov_Xtheta = sqrt( sigma2_theta * sigma2_X ) * rho
 
     Delta_theta = beta_theta_1 - mean( beta_theta_0 )
     delta_theta = mu_theta_1 - mu_theta_0
 
-    Delta_X = beta_x_1 - mean( beta_x_0 )
-    delta_x = mu_x_1 - mu_x_0
+    Delta_X = beta_X_1 - mean( beta_X_0 )
+    delta_X = mu_X_1 - mu_X_0
 
-    bias_naive =  Delta_theta * delta_theta +  delta_x * Delta_X
-    #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
+    bias_naive =  Delta_theta * delta_theta +  delta_X * Delta_X
+    #sum( Delta_theta * delta_theta ) + sum( delta_X * Delta_X )
 
-    bias_X = Delta_theta * (delta_theta - rho * delta_x * sqrt( sigma2_theta / sigma2_x ) )
+    delta_theta_tilde = delta_theta - cov_Xtheta * delta_X / sigma2_X
 
+    bias_X = Delta_theta * delta_theta_tilde
+
+
+    # Now do match on pre and X calculations
     if ( length( beta_theta_0 ) == 1 ) {
         beta_theta_0 = rep( beta_theta_0, num_pre )
     }
-    if ( length( beta_x_0 ) == 1 ) {
-        beta_x_0 = rep( beta_x_0, num_pre )
+    if ( length( beta_X_0 ) == 1 ) {
+        beta_X_0 = rep( beta_X_0, num_pre )
     }
-    coefs = cbind( beta_theta_0, beta_x_0 )
+    coefs = cbind( beta_theta_0, beta_X_0 )
 
-    varY = beta_theta_0^2 * sigma2_theta + beta_x_0^2 * sigma2_x +
-        2*(beta_theta_0*beta_x_0)*cov_Xtheta +
+    varY = beta_theta_0^2 * sigma2_theta + beta_X_0^2 * sigma2_X +
+        2*(beta_theta_0*beta_X_0)*cov_Xtheta +
         sigma2_pre
 
     sigma_thetaX = matrix( c( sigma2_theta, cov_Xtheta,
-                              cov_Xtheta, sigma2_x ), nrow= 2 )
+                              cov_Xtheta, sigma2_X ), nrow= 2 )
     sigma_YY = coefs %*% sigma_thetaX %*% t(coefs) + diag( rep( sigma2_pre, num_pre ) )
 
-    sigma_XY = matrix( c( beta_x_0 * sigma2_x + beta_theta_0 * cov_Xtheta ), nrow = 1 )
+    sigma_XY = matrix( c( beta_X_0 * sigma2_X + beta_theta_0 * cov_Xtheta ), nrow = 1 )
 
-    mat = cbind( rbind( sigma2_x, t( sigma_XY ) ),
+    mat = cbind( rbind( sigma2_X, t( sigma_XY ) ),
                  rbind( sigma_XY, sigma_YY ) )
     matInv = solve( mat )
 
-    sigma_thetaY = matrix( beta_theta_0 * sigma2_theta + beta_x_0 * cov_Xtheta, nrow = 1 )
+    sigma_thetaY = matrix( beta_theta_0 * sigma2_theta + beta_X_0 * cov_Xtheta, nrow = 1 )
 
     A = cbind( cov_Xtheta, sigma_thetaY )
 
-    C = matrix( c( delta_x, beta_theta_0*delta_theta + beta_x_0*delta_x ),
+    C = matrix( c( delta_X, beta_theta_0*delta_theta + beta_X_0*delta_X ),
                 ncol = 1 )
 
     AmC <- A %*% matInv %*% C
@@ -85,11 +89,16 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
 #' (This can only be run since we generated synthetic data with known
 #' truth)
 #'
+#' For single X we have
+#' Sigma_thetax = rho sigma_theta sigma_X
+#' tilde_delta_theta = delta_theta - rho (sigma_theta / sigma_X) delta_X
+#' tilde_sigma2_theta = sigma2_theta - rho^2 sigma2_theta
+#'
 calculate_truth <- function( beta_theta_1, beta_theta_0,
-                             beta_x_1, beta_x_0,
+                             beta_X_1, beta_X_0,
                              mu_theta_1, mu_theta_0,
-                             mu_x_1, mu_x_0,
-                             sigma2_theta = 1, sigma2_x = 1,
+                             mu_X_1, mu_X_0,
+                             sigma2_theta = 1, sigma2_X = 1,
                              sigma2_pre = 1.3, sigma2_post = 0.01,
                              p = 0.2, num_pre = 5, rho = 0.5 ) {
 
@@ -97,22 +106,21 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
     Delta_theta = beta_theta_1 - mean( beta_theta_0 )
     delta_theta = mu_theta_1 - mu_theta_0
 
-    Delta_X = beta_x_1 - mean( beta_x_0 )
-    delta_x = mu_x_1 - mu_x_0
+    Delta_X = beta_X_1 - mean( beta_X_0 )
+    delta_X = mu_X_1 - mu_X_0
 
-    bias_DiD =  Delta_theta * delta_theta +  delta_x * Delta_X
-    #sum( Delta_theta * delta_theta ) + sum( delta_x * Delta_X )
+    bias_DiD =  Delta_theta * delta_theta + delta_X * Delta_X
+    #sum( Delta_theta * delta_theta ) + sum( delta_X * Delta_X )
 
+    cov_Xtheta = sqrt( sigma2_theta * sigma2_X ) * rho
 
     # True Imbalance of Theta
-    tilde_delta_theta = (mu_theta_1 - mu_theta_0) -
-        (rho*sigma2_theta*sigma2_x)/sigma2_x^2*(mu_x_1 - mu_x_0)
+    tilde_delta_theta = delta_theta - cov_Xtheta*delta_X/sigma2_X
     tilde_delta_theta
 
 
     # True reduction in bias from matching on X
-    bias_naive = (beta_theta_1 - beta_theta_0)*(mu_theta_1 - mu_theta_0) +
-        (beta_x_1 - beta_x_0)*(mu_x_1 - mu_x_0)
+    bias_naive = delta_theta*Delta_theta + delta_X*Delta_X
     bias_X = (beta_theta_1 - beta_theta_0)*(tilde_delta_theta)
     bias_X
     bias_naive
@@ -120,22 +128,19 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
     abs(bias_X - bias_naive)
 
     # True reliability
-    tilde_sigma_theta = sigma2_theta^2 - (rho*sigma2_theta*sigma2_x)^2/sigma2_x^2
-    r = (num_pre*beta_theta_0^2*tilde_sigma_theta) /
-        ((num_pre*beta_theta_0^2*tilde_sigma_theta) + sigma2_pre^2)
-    r
+    tilde_sigma2_theta = sigma2_theta * (1-rho) #- cov_Xtheta^2 / sigma2_X
+    rT = (num_pre*beta_theta_0^2*tilde_sigma2_theta) /
+        ((num_pre*beta_theta_0^2*tilde_sigma2_theta) + sigma2_pre)
+    rT
 
     # True reduction in bias from matching additionally on Y_pre
-    bias_Y = beta_theta_1*tilde_delta_theta*(1 - r)
+    bias_Y = beta_theta_1*tilde_delta_theta*(1 - rT)
     abs(bias_Y - bias_X)
 
 
-    # True imbalance of X
-    delta_x = mu_x_1 - mu_x_0
-
     # True expected pre/post slope
-    beta_theta_pre = beta_theta_0*tilde_sigma_theta
-    beta_theta_post = beta_theta_1*tilde_sigma_theta
+    tilde_beta_theta_pre = beta_theta_0*sqrt(tilde_sigma2_theta)
+    tilde_beta_theta_post = beta_theta_1*sqrt(tilde_sigma2_theta)
 
 
     ## Add true values to compare to original estimates to ease comparison
@@ -143,14 +148,14 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
     biases = c( X = abs(bias_X - bias_naive),
                 `X & Ypre` = abs(bias_Y - bias_X) )
 
-    Delta_theta = beta_theta_post - beta_theta_pre
+    tilde_Delta_theta = tilde_beta_theta_post - tilde_beta_theta_pre
 
     delta = tribble( ~ quantity, ~beta_pre, ~beta_post, ~Delta, ~delta,
-                     "X",  NA, NA, NA, delta_x,
-                     "theta (~)", beta_theta_pre, beta_theta_post, Delta_theta, tilde_delta_theta  )
+                     "X",  beta_X_0, beta_X_1, Delta_X, delta_X,
+                     "theta (~)", tilde_beta_theta_pre, tilde_beta_theta_post, tilde_Delta_theta, tilde_delta_theta  )
 
-    param = c( r = r,
-               s = beta_theta_pre / beta_theta_post )
+    param = c( r = rT,
+               s = tilde_beta_theta_pre / tilde_beta_theta_post )
 
     list( biases = biases, params = param, delta = delta )
 
