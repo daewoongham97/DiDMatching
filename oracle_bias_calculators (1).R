@@ -161,8 +161,8 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
 
     param = c( r = rT,
                s = tilde_beta_theta_pre / tilde_beta_theta_post )
-
-    list( biases = biases, params = param, delta = delta )
+    decision_match_Y = rT > (1 - abs(1 - mean(beta_theta_0)/beta_theta_1))
+    list( biases = biases, params = param, delta = delta, decision_match_Y = decision_match_Y )
 
 }
 
