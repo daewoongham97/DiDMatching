@@ -70,6 +70,8 @@ aggregate_residual_calcs <- function( all_residuals, post_residuals,
 
 #' Under stability assumptions, convert an overall rT_theta to the
 #' r_theta of a single timepoint.
+#'
+#' @param T number of pre-treatment time periods.
 calc_r_theta <- function( rT_theta, T ) {
     rT_theta / (T * (1-rT_theta) + rT_theta)
 }

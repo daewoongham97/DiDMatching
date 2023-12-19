@@ -11,18 +11,20 @@ library( tidyverse )
 
 #### Make a fake dataset for illustration ####
 
+seed = 43434
+
 source( here::here( "data_simulator.R" ) )
 beta_theta_1 = 1.5; beta_theta_0 = 1.0
 beta_x_1 = 0.8; beta_x_0 = 0.5;
 mu_theta_1 = 1; mu_theta_0 = 0.1
 mu_x_1 = 0.7; mu_x_0 = 0.5; sigma2_theta = 1;
-sigma2_x = 1; sigma2_pre = 0.8; sigma2_post = 0.01;  p = 0.2; rho = 0; num_pre = 4
+sigma2_x = 1; sigma2_pre = 0.8; p = 0.2; rho = 0; num_pre = 4
 
-df = make_data(N = 10000, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta_1,
+df = make_data(N = 10000, seed = seed, num_pre = num_pre, beta_theta_1 = beta_theta_1,
                beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
                mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
                mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
-               sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
+               sigma2_x = sigma2_x, sigma2_pre = sigma2_pre,
                p = p, rho = rho)
 
 # A hypothetical dataset!
@@ -132,6 +134,12 @@ filter( df_long, ID == 5 )
 # Count of when units are treated by year
 table( treat=df_long$treat, year=df_long$year )
 
+# Or by time of treatment (control are infinity)
+table( df_long$time_tx ) / 10
+
+# Number of distinct IDs (units)
+table( table( df_long$ID ) )
+
 
 # The following is what "stacked" data looks like; those years with no
 # lags have been dropped.  This method could be useful, but you can
@@ -158,6 +166,8 @@ res_stg = DiD_matching_guideline_staggered( Y_post = "Y",
                                             add_lagged_outcomes = TRUE,
                                             n_lags = 4 )
 res_stg
+
+
 
 
 

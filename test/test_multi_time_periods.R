@@ -1,6 +1,6 @@
 
 
-# Testing two time periods
+# Testing multiple time periods
 #
 # QUESTION: Why does the check reject even if we give true r_theta?
 # This seems like we have a bug.

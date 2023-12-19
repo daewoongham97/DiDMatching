@@ -10,6 +10,9 @@ library(devtools)
 #' DiD_matching_func().  There is no actual treatment effect of
 #' treatment for these data.
 #'
+#' Allows for single covariate and single latent confounder (so p = q
+#' = 1 in the language of the paper).
+#'
 #' @param N Total sample size
 #' @param beta_theta_1 Post-slope for theta
 #' @param beta_theta_0 Pre-slope for theta (can be a vector of length
@@ -21,32 +24,22 @@ library(devtools)
 #' @param mu_theta_0 Mean of theta among control
 #' @param mu_x_1 Mean of X among treated
 #' @param mu_x_0 Mean of X among control
-#' @param sigma2_theta Standard deviation of theta within
-#'   treatment/control group
-#' @param sigma2_x Standard deviation of X within treatment/control group
-#' @param sigma2_pre Standard deviation of noise term for pre-treatment
+#' @param sigma2_theta Variance of theta within treatment/control
+#'   group
+#' @param sigma2_x Variance of X within treatment/control group
+#' @param rho correlation between theta and X
+#' @param sigma2_pre Variance of noise term for pre-treatment outcome
+#'   (can be a vector of length T).
+#' @param sigma2_post Variance of noise term for post-treatment
 #'   outcome
-#' @param sigma2_post Standard deviation of noise term for
-#'   post-treatment outcome
 #' @param p proportion expected to be treated in Bernoulli treatment
 #'   assignment
-#' @param rho correlation between theta and X
 #' @param num_pre Number of pre-treatment time periods
 #' @param seed Initialized seed
 #'
-#' @return A list containing:
-#'
-#'   \item{result_df}{A dataframe containing the following: 1)
-#'   Estimated reduction of bias from matching on X.
-#'
-#'   2) Whether or not user should match additionally on pre-treatment
-#'   outcome. TRUE = YES and FALSE = NO.
-#'
-#'   3) Estimated reduction/increase of bias from matching
-#'   additionally on pre-treatment outcome}
-#'
-#'   \item{list}{An additional list containing estimated parameters,
-#'   e.g., estimated reliability, estimated pre-slope, etc.}
+#' @return A dataset with N rows and the outcomes as columns, one
+#'   column for each time period.  Columns numbered 0 through T.  Also
+#'   a column for latent theta and X, and a treatment indicator.
 make_data = function(N,
                      beta_theta_1, beta_theta_0,
                      beta_x_1, beta_x_0,
@@ -90,7 +83,7 @@ make_data = function(N,
 
     if (  num_pre > 1 ) {
         if ( length( beta_theta_0 ) == 1 ) {
-        beta_theta_0 = rep( beta_theta_0, num_pre )
+            beta_theta_0 = rep( beta_theta_0, num_pre )
         }
         if ( length( beta_x_0 ) == 1 ) {
             beta_x_0 = rep( beta_x_0, num_pre )
@@ -109,14 +102,70 @@ make_data = function(N,
 
 
 
+
+#### Demo/testing code ####
+
+if ( FALSE ) {
+
+    library( tidyverse )
+
+    beta_theta_1 = 1.5; beta_theta_0 = 0.5
+    beta_x_1 = 1.8; beta_x_0 = 0.5;
+    mu_theta_1 = 1; mu_theta_0 = 0.1
+    mu_x_1 = 1; mu_x_0 = 0.0
+    sigma2_theta = 1;
+    sigma2_x = 1
+    sigma2_pre = 0.8
+    sigma2_post = sigma2_pre;  p =0.2; rho = 0.2
+    num_pre = 4
+
+    df = make_data(N = 200, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta_1,
+                   beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+                   mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                   mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
+                   sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
+                   p = p, rho = rho)
+
+    head( df )
+
+    df %>% group_by( treatment ) %>%
+        summarise( Xbar = mean(X),
+                   thetaBar = mean(theta) )
+
+    df_long = df %>%
+        mutate( ID = 1:n() ) %>%
+        pivot_longer( cols = starts_with( "Y" ),
+                      names_to = "time", names_prefix = "Y_",
+                      names_transform = as.integer,
+                      values_to = "Y" )
+    df_long
+
+    ggplot( df_long, aes( time, Y, col=as.factor(treatment) ) ) +
+        geom_line( aes( group=ID ), alpha=0.25 ) +
+        geom_smooth( se=FALSE )
+
+    source( "oracle_bias_calculators.R" )
+
+    calculate_truth(num_pre = num_pre, beta_theta_1 = beta_theta_1,
+                    beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
+                    mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                    mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
+                    sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
+                    p = p, rho = rho)
+}
+
+#### Staggered adoption ####
+
+
 #' Make staggered adoption data
 #'
 #' Use a variant of the above DGP, but in a staggered adoption
 #' context.
 #'
 #' @inheritParams make_data
+#'
 #' @param inter List of intercepts, one for each year.  If 2 values,
-#'   will interpolate.
+#'   will interpolate.  This allows for time trend.
 #' @param beta_theta List of latent covariate-outcome values, one for
 #'   each year.  If 2 values, will interpolate.
 #' @param beta_x List of observed covariate_outcome values, one for
@@ -133,8 +182,9 @@ make_data_long <- function( N,
                             mu_theta_1, mu_theta_0,
                             mu_x_1, mu_x_0,
                             sigma2_theta = 1, sigma2_x = 1,
+                            rho = 0.5,
                             sigma2_e = 1,
-                            p = 0.2, num_pre = 5, rho = 0.5, seed = NULL ) {
+                            p = 0.2, num_pre = 5, seed = NULL ) {
 
     stopifnot( num_pre >= 1 )
 
@@ -194,55 +244,37 @@ make_data_long <- function( N,
     return(dat)
 }
 
-
-
-
-#### Demo/testing code ####
+#### Testing code ####
 
 if ( FALSE ) {
 
     library( tidyverse )
 
-    beta_theta_1 = 1.5; beta_theta_0 = 0.5
-    beta_x_1 = 1.8; beta_x_0 = 0.5;
+    beta_theta = c( 1.5, 0.5 )
+    beta_x = c( 1.8, 0.5 )
     mu_theta_1 = 1; mu_theta_0 = 0.1
     mu_x_1 = 1; mu_x_0 = 0.0
     sigma2_theta = 1;
     sigma2_x = 1
-    sigma2_pre = 0.8; sigma2_post = 0.01;  p =0.2; rho = 0.2
+    sigma2_e = 0.8
+    p =0.2; rho = 0.2
     num_pre = 4
 
-    df = make_data(N = 200, seed = 1, num_pre = num_pre, beta_theta_1 = beta_theta_1,
-                   beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
-                   mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                   mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
-                   sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
-                   p = p, rho = rho)
 
-    head( df )
+    df = make_data_long(N = 200, span_years = 10,
+                        inter = c( 0, 5 ),
+                        seed = 1, num_pre = num_pre,
+                        beta_theta = beta_theta,
+                        beta_x = beta_x,
+                        mu_theta_0 = mu_theta_0,
+                        mu_theta_1 = mu_theta_1,
+                        mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
+                        sigma2_theta = sigma2_theta,
+                        sigma2_x = sigma2_x, rho = rho,
+                        sigma2_e = sigma2_e,
+                        p = p )
 
-    df %>% group_by( treatment ) %>%
-        summarise( Xbar = mean(X),
-                   thetaBar = mean(theta) )
-
-    df_long = df %>%
-        mutate( ID = 1:n() ) %>%
-        pivot_longer( cols = starts_with( "Y" ),
-                      names_to = "time", names_prefix = "Y_",
-                      names_transform = as.integer,
-                      values_to = "Y" )
-    df_long
-
-    ggplot( df_long, aes( time, Y, col=as.factor(treatment) ) ) +
-        geom_line( aes( group=ID ), alpha=0.25 ) +
-        geom_smooth( se=FALSE )
-
-    source( "oracle_bias_calculators.R" )
-
-    calculate_truth(num_pre = num_pre, beta_theta_1 = beta_theta_1,
-                    beta_theta_0 = beta_theta_0, beta_x_1 = beta_x_1, beta_x_0 = beta_x_0,
-                    mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
-                    mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, sigma2_theta = sigma2_theta,
-                    sigma2_x = sigma2_x, sigma2_pre = sigma2_pre, sigma2_post = sigma2_post,
-                    p = p, rho = rho)
+    table( df$time_tx )
 }
+
+
