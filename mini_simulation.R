@@ -12,11 +12,13 @@ source( "oracle_bias_calculators.R" )
 one_run <- function( N, num_pre,
                      beta_X_0, beta_X_1, beta_theta_0, beta_theta_1,
                      mu_X_0, mu_X_1, mu_theta_0, mu_theta_1,
+                     p,
                      ... ) {
 
     df = make_data( N = N, num_pre = num_pre,
                     beta_X_0, beta_X_1, beta_theta_0, beta_theta_1,
                     mu_X_0, mu_X_1, mu_theta_0, mu_theta_1,
+                    p = p,
                     ...)
 
     #browser()
@@ -27,7 +29,7 @@ one_run <- function( N, num_pre,
                                   treatment = "treatment",
                                   X = "X", df)
     res
-    browser()
+    #browser()
 
     # get truth
     truth <- calculate_truth( num_pre = num_pre,
@@ -39,7 +41,7 @@ one_run <- function( N, num_pre,
                                        mu_X_0, mu_X_1, mu_theta_0, mu_theta_1,
                                        ... )
 
-    res$result$true = truth$biases
+    res$result$true = truth$biases[2:3]
     res$result$true.v = truth2$bias_reduction[2:3]
     res$statistic$true = truth$params
     res$delta$true = truth$delta$delta
@@ -141,7 +143,8 @@ sims <- expand_grid( rho = c( 0, 0.5, 0.9 ),
 sims <- filter( sims, delta_X == 2 | s_X == 1 )
 
 cat( "Running", nrow(sims), "simulations\n" )
-rawres = pmap_df( sims, run_validation_simulation, R = 1000,
+R = 1000
+rawres = pmap_df( sims, run_validation_simulation, R = R,
                   .id = "scenario" )
 
 cat( "Complete\n" )

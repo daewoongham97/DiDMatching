@@ -1,12 +1,17 @@
-
-# Function to calculate true biases when we know the DGP parameters
+# Functions to calculate true biases when we know the DGP parameters
 #
 # This is useful for verifying the formulas of the paper and comparing
 # the results to empirically found results from simulations.
 
+library(tibble)
 
-#' Calculate true values of bias, etc., for given model with single x
+
+
+#' Calculate true values of bias, etc., for given model with single X
 #' and theta.
+#'
+#' This method allows for non-parallel trends in the pre-treatment
+#' period.
 #'
 #' @param sigma2_X The variance of x
 #' @param rho The correlation of X and theta.
@@ -16,7 +21,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
                                      mu_X_1, mu_X_0,
                                      sigma2_theta = 1, sigma2_X = 1,
                                      sigma2_pre = 1.3, sigma2_post = sigma2_pre,
-                                     p = 0.2, num_pre = 5, rho = 0.5 ) {
+                                     num_pre = 5, rho = 0.5 ) {
 
     cov_Xtheta = sqrt( sigma2_theta * sigma2_X ) * rho
 
@@ -34,7 +39,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
     bias_X = Delta_theta * delta_theta_tilde
 
 
-    # Now do match on pre and X calculations
+    # Now do match on pre and X calculations this is assuming assumption 1 right?
     if ( length( beta_theta_0 ) == 1 ) {
         beta_theta_0 = rep( beta_theta_0, num_pre )
     }
@@ -49,6 +54,7 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
 
     sigma_thetaX = matrix( c( sigma2_theta, cov_Xtheta,
                               cov_Xtheta, sigma2_X ), nrow= 2 )
+
     sigma_YY = coefs %*% sigma_thetaX %*% t(coefs) + diag( rep( sigma2_pre, num_pre ) )
 
     sigma_XY = matrix( c( beta_X_0 * sigma2_X + beta_theta_0 * cov_Xtheta ), nrow = 1 )
@@ -82,17 +88,22 @@ calculate_truth_varying <- function( beta_theta_1, beta_theta_0,
 }
 
 
+# check_YY = function(i, j) {
+#   beta_theta_0[i]*beta_theta_0[j]*sigma2_theta + beta_X_0[i]*beta_X_0[j]*sigma2_X +
+#     (beta_X_0[i]*beta_theta_0[j] + beta_X_0[j]*beta_theta_0[i])*cov_Xtheta
+# }
 
-#' Calculate true values of bias, etc., for given model with single x
+
+
+#' Calculate true values of bias, etc., for given model with single X
 #' and theta.
 #'
-#' (This can only be run since we generated synthetic data with known
-#' truth)
+#' This version assumes parallel trends in the pre-treatment period,
+#' and is thus akin to the guideline provided in the paper.
 #'
-#' For single X we have
-#' Sigma_thetax = rho sigma_theta sigma_X
-#' tilde_delta_theta = delta_theta - rho (sigma_theta / sigma_X) delta_X
-#' tilde_sigma2_theta = sigma2_theta - rho^2 sigma2_theta
+#' For a single X we have Sigma_thetax = rho sigma_theta sigma_X
+#' tilde_delta_theta = delta_theta - rho (sigma_theta / sigma_X)
+#' delta_X tilde_sigma2_theta = sigma2_theta - rho^2 sigma2_theta
 #'
 calculate_truth <- function( beta_theta_1, beta_theta_0,
                              beta_X_1, beta_X_0,
@@ -100,7 +111,7 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
                              mu_X_1, mu_X_0,
                              sigma2_theta = 1, sigma2_X = 1,
                              sigma2_pre = 1.3, sigma2_post = 0.01,
-                             p = 0.2, num_pre = 5, rho = 0.5 ) {
+                             num_pre = 5, rho = 0.5 ) {
 
 
     Delta_theta = beta_theta_1 - mean( beta_theta_0 )
@@ -121,16 +132,13 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
 
     # True reduction in bias from matching on X
     bias_naive = delta_theta*Delta_theta + delta_X*Delta_X
-    bias_X = (beta_theta_1 - beta_theta_0)*(tilde_delta_theta)
-    bias_X
-    bias_naive
-
-    abs(bias_X - bias_naive)
+    bias_X = (beta_theta_1 - mean(beta_theta_0))*(tilde_delta_theta)
 
     # True reliability
-    tilde_sigma2_theta = sigma2_theta * (1-rho) #- cov_Xtheta^2 / sigma2_X
-    rT = (num_pre*beta_theta_0^2*tilde_sigma2_theta) /
-        ((num_pre*beta_theta_0^2*tilde_sigma2_theta) + sigma2_pre)
+    tilde_sigma2_theta = sigma2_theta * (1-rho^2) #- cov_Xtheta^2 / sigma2_X
+    #note to luke: you originally had rho not rho^2 which is a typo
+    rT = (num_pre*mean(beta_theta_0^2)*tilde_sigma2_theta) /
+        ((num_pre*mean(beta_theta_0^2)*tilde_sigma2_theta) + sigma2_pre)
     rT
 
     # True reduction in bias from matching additionally on Y_pre
@@ -139,35 +147,85 @@ calculate_truth <- function( beta_theta_1, beta_theta_0,
 
 
     # True expected pre/post slope
-    tilde_beta_theta_pre = beta_theta_0*sqrt(tilde_sigma2_theta)
+    tilde_beta_theta_pre = mean(beta_theta_0)*sqrt(tilde_sigma2_theta)
     tilde_beta_theta_post = beta_theta_1*sqrt(tilde_sigma2_theta)
 
 
     ## Add true values to compare to original estimates to ease comparison
 
-    biases = c( X = abs(bias_X - bias_naive),
-                `X & Ypre` = abs(bias_Y - bias_X) )
+    biases = c( naive = bias_naive,
+                X = bias_X,
+                `X & Ypre` = bias_Y)
 
     tilde_Delta_theta = tilde_beta_theta_post - tilde_beta_theta_pre
 
     delta = tribble( ~ quantity, ~beta_pre, ~beta_post, ~Delta, ~delta,
-                     "X",  beta_X_0, beta_X_1, Delta_X, delta_X,
+                     "X",  mean(beta_X_0), beta_X_1, Delta_X, delta_X,
                      "theta (~)", tilde_beta_theta_pre, tilde_beta_theta_post, tilde_Delta_theta, tilde_delta_theta  )
 
     param = c( r = rT,
                s = tilde_beta_theta_pre / tilde_beta_theta_post )
-
-    list( biases = biases, params = param, delta = delta )
+    decision_match_Y = rT > (1 - abs(1 - mean(beta_theta_0)/beta_theta_1))
+    list( biases = biases, params = param, delta = delta, decision_match_Y = decision_match_Y )
 
 }
 
 
+if ( FALSE ) {
+
+    # let's make sure they align when assumption 1 is true
+    num_pre = 5
+    sigma2_theta = runif(1); sigma2_X = runif(1); sigma2_pre = runif(1)
+    beta_theta_0 = runif(1); beta_theta_1 = runif(1)
+    beta_X_0 = runif(1); beta_X_1 = runif(1)
+    mu_theta_1 = runif(1); mu_theta_0 = runif(1)
+    mu_X_1 = runif(1); mu_X_0 = runif(1)
+    rho = runif(1)
+
+    a <- calculate_truth_varying(beta_theta_1, beta_theta_0, beta_X_1, beta_X_0, mu_theta_1,
+                            mu_theta_0, mu_X_1, mu_X_0, sigma2_theta, sigma2_X, sigma2_pre,
+                            num_pre = num_pre, rho = rho)
+
+    b <- calculate_truth(beta_theta_1, beta_theta_0, beta_X_1, beta_X_0,
+                    mu_theta_1, mu_theta_0,
+                    mu_X_1, mu_X_0,
+                    sigma2_theta, sigma2_X,
+                    sigma2_pre, num_pre = num_pre, rho = rho)
+
+    a
+    b
+
+    ### you can see the biases agree
+    a$bias - b$biases
 
 
+    ##### without assumption 1
+
+    num_pre = 5
+    sigma2_theta = runif(1); sigma2_X = runif(1); sigma2_pre = runif(1)
+    beta_theta_0 = runif(num_pre, -1, 1); beta_theta_1 = runif(1)
+    beta_X_0 = runif(num_pre); beta_X_1 = runif(1)
+    mu_theta_1 = runif(1); mu_theta_0 = runif(1)
+    mu_X_1 = runif(1); mu_X_0 = runif(1)
+    rho = runif(1)
 
 
+    a <- calculate_truth_varying(beta_theta_1, beta_theta_0,
+                                 beta_X_1, beta_X_0,
+                                 mu_theta_1, mu_theta_0,
+                                 mu_X_1, mu_X_0,
+                                 sigma2_theta, sigma2_X,
+                                 sigma2_pre,
+                                 num_pre = num_pre, rho = rho )
+
+    b <- calculate_truth(beta_theta_1, beta_theta_0, beta_X_1, beta_X_0,
+                    mu_theta_1, mu_theta_0,
+                    mu_X_1, mu_X_0,
+                    sigma2_theta, sigma2_X,
+                    sigma2_pre, num_pre = num_pre, rho = rho)
 
 
+    ## bias no longer agree without assumption 1
+    a$bias - b$biases
 
-
-
+}
