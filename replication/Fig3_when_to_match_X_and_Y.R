@@ -121,6 +121,8 @@ plot_3 = ggplot(data = plot_df_3, aes(x = x, y = bias, col = group)) + geom_line
 
 fig_3 = ggarrange(plot_1, plot_2, plot_3, common.legend = TRUE, nrow = 1)
 
+fig_3
+
 ggsave(file="Figures/Fig3.pdf", fig_3,  width = 12, height = 4, device = "pdf")
 
 
