@@ -81,13 +81,12 @@ if ( FALSE ) {
 
 if ( FALSE ) {
 
+    # Set parameters for debugging if needed
     N = 1000; beta_theta_1 = 1.5; beta_theta_0 = 1.0;
     beta_X_1 = 0.8; beta_X_0 = 0.5;
     mu_theta_1 = 1; mu_theta_0 = 0.1; mu_X_1 = 0.7; mu_X_0 = 0.5; sigma2_theta = 1;
     sigma2_X = 1; sigma2_pre = 0.8;
     p = 0.2; rho = 0.2; num_pre = 4
-
-
 
 }
 
