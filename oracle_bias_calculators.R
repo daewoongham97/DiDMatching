@@ -62,13 +62,15 @@ calculate_truth_general <- function( beta_theta_1, beta_theta_0,
     delta_theta = mu_theta_1 - mu_theta_0
 
     Delta_X = beta_X_1 - apply( beta_X_0, 2, mean )
-    delta_X = matrix( mu_X_1 - mu_X_0, nrow = 1 )
-
+    #delta_X = matrix( mu_X_1 - mu_X_0, nrow = 1 ) # it shoudl be ncol = 1?
+    delta_X = matrix( mu_X_1 - mu_X_0, ncol = 1 ) 
+    
+    
     # Bias from difference in means
     bias_DiM = as.numeric( beta_theta_1 * delta_theta + sum( beta_X_1 * delta_X ) )
 
     # Bias from simple DiD with no matching
-    bias_naive = as.numeric( Delta_theta * delta_theta +  sum( Delta_X * delta_X ) )
+    bias_naive = as.numeric( Delta_theta * delta_theta +  sum( Delta_X %*% delta_X ) )
     #sum( Delta_theta * delta_theta ) + sum( delta_X * Delta_X )
 
     delta_theta_tilde = delta_theta - cov_Xtheta %*% solve( Sigma_X ) %*% t( delta_X )
@@ -100,7 +102,7 @@ calculate_truth_general <- function( beta_theta_1, beta_theta_0,
 
     A = cbind( cov_Xtheta, t( sigma_thetaY ) )
 
-    C = rbind( t( delta_X ), beta_theta_0*delta_theta + beta_X_0 %*% t( delta_X ) )
+    C = rbind( ( delta_X ), beta_theta_0*delta_theta + beta_X_0 %*% ( delta_X ) )
 
     AmC <- A %*% matInv %*% C
     bias_XY <- beta_theta_1*(delta_theta - AmC)

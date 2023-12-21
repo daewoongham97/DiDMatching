@@ -26,7 +26,7 @@ make_data = function(N,
                      mu_Z_1, mu_Z_0,
                      sigma2_theta = 1, sigma2_X = 1, sigma2_Z = 1,
                      sigma2_pre = 1.3, sigma2_post = sigma2_pre,
-                     p = 0.2, num_pre = 2, rho = c(0.3, 0.4), XZ_cor, seed = NULL) {
+                     p = 0.2, num_pre = 2, rho = c(0.3, 0.4), a, seed = NULL) {
 
     sigma_theta = sqrt(sigma2_theta)
     sigma_X = sqrt(sigma2_X)
@@ -80,7 +80,6 @@ make_data = function(N,
 ```{r}
 library(dplyr)
 library(MASS)
-source( here::here( "DiD_matching_func.R" ) )
 
 
 
@@ -140,13 +139,13 @@ bias_match_both_truth = function(rho, beta_theta_0, beta_x_0, beta_theta_1, beta
   Delta_theta = beta_theta_1 - mean(c(beta_theta_0, beta_theta_pre))
   delta_theta = mu_theta_1 - mu_theta_0
   
-  Delta_X = beta_X_1 - mean(c(beta_x_0, beta_x_pre))
+  Delta_X = beta_x_1 - mean(c(beta_x_0, beta_x_pre))
   delta_X = mu_x_1 - mu_x_0
   
-  Delta_Z = beta_Z_1 - mean(c(beta_z_0, beta_z_pre))
+  Delta_Z = beta_z_1 - mean(c(beta_z_0, beta_z_pre))
   delta_Z = mu_z_1 - mu_z_0
   
-  delta_theta_tilde = delta_theta - cov_Xtheta %*% solve(Sigma_XX) %*% t(cbind(delta_X, delta_Z))
+  delta_theta_tilde = delta_theta - cov_Xtheta %*% solve(sigma_XX) %*% t(cbind(delta_X, delta_Z))
   
   bias_X = Delta_theta * delta_theta_tilde
   
@@ -225,6 +224,52 @@ truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, 
 truth; guess
 ```
 
+### let's check it against your function
+```{r}
+source( here::here( "oracle_bias_calculators.R" ) )
+
+
+
+beta_theta_1 = 1.5; beta_theta_0 = 1.0; beta_theta_pre = 0.5
+
+beta_x_1 = 1.3; beta_x_0 = 1.1; beta_x_pre = 0.6
+
+beta_z_1 = 1.0; beta_z_0 = 0.7; beta_z_pre = 0.3
+
+mu_theta_1 = mu_x_1 = mu_z_1 = 1
+mu_theta_0 = mu_x_0 = mu_z_0 = 0
+sig_z = sig_theta = sig_x = sigma_pre = 1
+
+rho = c(0.5, 0.3)
+num_pre = 2
+a = 0  
+
+truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre,
+                        beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
+                        mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
+                        mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre, a = a)
+  
+# redefining parameters to match your inputs    
+bt0 = c(beta_theta_pre, beta_theta_0)
+bx0 = cbind(c(beta_x_pre, beta_x_0), c(beta_z_pre, beta_z_0))
+mX1 = c(mu_x_1, mu_z_1)
+mX0 = c(mu_x_0, mu_z_0)
+Sigma_theta = 1
+Sigma_X = matrix( c(1,a,a,1), nrow=2 )
+cov_Xtheta = rho
+sigma2_e = sigma_pre^2
+
+
+truth2 = calculate_truth_general(beta_theta_1, beta_theta_0 = bt0,
+                        beta_X_1 = beta_x_1, beta_X_0 = bx0, mu_theta_1, mu_theta_0,
+                        mu_X_1 = mX1, mu_X_0 = mX0, Sigma_theta, Sigma_X, cov_Xtheta, sigma2_e, num_pre = num_pre)
+
+## aligned!!
+truth; truth2
+
+```
+
+
 
 ## getting theoretical truths
 ```{r}
@@ -245,10 +290,10 @@ sig_z = sig_theta = sig_x = 1
 
 rho = c(0.3, 0.4)
 
-sigma_pre_tests = c(0.3, 0.45, 0.6, 0.75, 0.88, 0.92, 1.0, 1.1)
+sigma_pre_tests = c(0.3, 0.6, 0.9, 1.0, 1.1, 1.2, 1.4, 1.5)
 a = 0.3
 
-#boundary is at sigma_pre = 0.656
+#boundary is at sigma_pre = 1.03
 
 ### let's first calculate the theoretical biases under these scenarios
 ### using our formula in the paper ### (green line in Figure 3)
@@ -276,6 +321,9 @@ diff
 # empirically simulating data and running our guideline
 
 ```{r}
+source( here::here( "DiD_matching_func.R" ) )
+
+N = 20000
 ### this is actual empirically measured ones ### (blue line in Figure 3)
 correct_decision = a_tau_xy = a_est_beta0 = a_est_beta1 = a_est_delta_theta = a_est_sig_pre_sq = vector()
 for (j in 1:length(sigma_pre_tests)) {
@@ -290,7 +338,7 @@ for (j in 1:length(sigma_pre_tests)) {
                        mu_theta_1, mu_theta_0, mu_X_1 = mu_x_1, mu_X_0 = mu_x_0, 
                        mu_Z_1 = mu_z_1, mu_Z_0 = mu_z_0,
                        sigma2_theta = sig_theta^2, sigma2_X = sig_x^2, sigma2_Z = sig_z^2,
-                       sigma2_pre = sigma_pre^2, num_pre = 2, rho = rho, XZ_cor = a, seed = i)
+                       sigma2_pre = sigma_pre^2, num_pre = 2, rho = rho, a = a, seed = i)
                 
         Y_pre = colnames(df)[5:6]
         Y_post =  colnames(df)[ncol(df)]
@@ -345,7 +393,7 @@ w = 50
 s2 = 5
 a1 = 15
 a2 = 20
-boundary = 0.656^2
+boundary = 1.03^2
 plot_df = data.frame(sigma_pre = sigma_pre_tests^2, correct_decision, a_tau_xy, true_diffs)
 
 save(plot_df, file = "~/Downloads/plot_df")
