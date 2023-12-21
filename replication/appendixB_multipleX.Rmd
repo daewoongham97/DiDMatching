@@ -80,7 +80,7 @@ make_data = function(N,
 ```{r}
 library(dplyr)
 library(MASS)
-#source( here::here( "DiD_matching_func.R" ) )
+source( here::here( "DiD_matching_func.R" ) )
 
 
 
@@ -229,7 +229,7 @@ truth; guess
 ## getting theoretical truths
 ```{r}
 #### Actual simulation
-K = 100
+K = 1000
 
 # boundary
 #sigma_pre = 1.347 (the exact decision boundary point)
