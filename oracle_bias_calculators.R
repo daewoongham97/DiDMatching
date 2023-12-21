@@ -65,13 +65,13 @@ calculate_truth_general <- function( beta_theta_1, beta_theta_0,
     delta_X = matrix( mu_X_1 - mu_X_0, nrow = 1 )
 
     # Bias from difference in means
-    bias_DiM = as.numeric( beta_theta_1 * delta_theta + beta_X_1 %*% delta_X )
+    bias_DiM = as.numeric( beta_theta_1 * delta_theta + sum( beta_X_1 * delta_X ) )
 
     # Bias from simple DiD with no matching
     bias_naive = as.numeric( Delta_theta * delta_theta +  sum( Delta_X * delta_X ) )
     #sum( Delta_theta * delta_theta ) + sum( delta_X * Delta_X )
 
-    delta_theta_tilde = delta_theta - cov_Xtheta %*% solve( Sigma_X ) %*% delta_X
+    delta_theta_tilde = delta_theta - cov_Xtheta %*% solve( Sigma_X ) %*% t( delta_X )
 
     # Bias from matching on X
     bias_X = as.numeric( Delta_theta %*% delta_theta_tilde )
@@ -368,7 +368,7 @@ if ( FALSE ) {
 
 
 
-
+#### Checking general method against specific methods ####
 if ( FALSE ) {
 
     # Checking general against specific
@@ -391,14 +391,12 @@ if ( FALSE ) {
                          sigma2_theta, sigma2_X,
                          sigma2_pre, num_pre = num_pre, rho = rho)
 
-    a
-    b
-
     c <- calculate_truth_general_1D( beta_theta_1, beta_theta_0, beta_X_1, beta_X_0, mu_theta_1,
                                      mu_theta_0, mu_X_1, mu_X_0, sigma2_theta, sigma2_X, sigma2_pre,
                                      num_pre = num_pre, rho = rho )
     c
     a
+    a$bias - c$bias[-1]
 
 
 
@@ -433,6 +431,59 @@ if ( FALSE ) {
     a
     b
     a$bias - b$bias[-1]
+
+
+
+    #### General method works for multiple X? ####
+    # Adapting from the simulation B context
+    beta_theta_1 = 1.5
+    beta_theta_0 = c( 0.5, 1.0 )
+
+    beta_X_1 = 1.3
+    beta_X_0 = c( 0.6, 1.1 )
+    beta_Z_1 = 1.0
+    beta_Z_0 = c( 0.3, 0.7 )
+
+    mu_theta_1 = 1
+    mu_X_1 = c( 1, 1 )
+    mu_theta_0 = 0
+    mu_X_0 = c( 0, 0 )
+    sig_Z = sig_theta = sig_X = sigma_pre = 1
+    a = 0
+    Sigma_X = matrix( c( sig_X^2, a*sig_X*sig_Z, a
+                         *sig_X*sig_Z, sig_Z^2 ), nrow = 2 )
+    rho = c(0, 0) * sig_X * sig_theta
+
+    calculate_truth_general( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
+                                         beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
+                                         mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                                         mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
+                                         Sigma_theta = sig_theta, Sigma_X = Sigma_X, cov_Xtheta = rho,
+                                         sigma2_e = sigma_pre,
+                                         num_pre = 2 )
+
+
+    a = 0.5
+    rho = c(0.5, 0.3) * sig_X * sig_theta
+
+    Sigma_X = matrix( c( sig_X^2, a*sig_X*sig_Z, a
+                         *sig_X*sig_Z, sig_Z^2 ), nrow = 2 )
+    calculate_truth_general( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
+                             beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
+                             mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                             mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
+                             Sigma_theta = sig_theta, Sigma_X = Sigma_X, cov_Xtheta = rho,
+                             sigma2_e = sigma_pre,
+                             num_pre = 2 )
+
+    # If we don't have much noise, then match?
+    calculate_truth_general( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
+                             beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
+                             mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                             mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
+                             Sigma_theta = sig_theta, Sigma_X = Sigma_X, cov_Xtheta = rho,
+                             sigma2_e = sigma_pre / 5,
+                             num_pre = 2 )
 
 }
 
