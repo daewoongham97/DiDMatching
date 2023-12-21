@@ -328,7 +328,7 @@ sig_z = sig_theta = sig_x = 1
 
 rho = c(0.3, 0.4)
 
-sigma_pre_tests = c(0.3, 0.6, 0.9, 1.0, 1.1, 1.2, 1.4, 1.5)
+sigma_pre_tests = c(0.3, 0.6, 0.75, 0.9, 1.0, 1.1, 1.2, 1.4, 1.5)
 a = 0.3
 
 #boundary is at sigma_pre = 1.03
