@@ -17,6 +17,8 @@ In particular, this document produces Figure 4 and Table 2 in Appendix B.
 ```{r}
 # this will only make data for the specific set up with (X, Z, theta)
 # extends your make data function to account for Z
+#
+# rho: correlation of Xs with theta.
 make_data = function(N,
                      beta_theta_1, beta_theta_0, beta_theta_pre,
                      beta_X_1, beta_X_0, beta_X_pre, 
@@ -27,48 +29,48 @@ make_data = function(N,
                      sigma2_theta = 1, sigma2_X = 1, sigma2_Z = 1,
                      sigma2_pre = 1.3, sigma2_post = sigma2_pre,
                      p = 0.2, num_pre = 2, rho = c(0.3, 0.4), a, seed = NULL) {
-
+    
     sigma_theta = sqrt(sigma2_theta)
     sigma_X = sqrt(sigma2_X)
     sigma_pre = sqrt(sigma2_pre)
     sigma_post = sqrt(sigma2_post)
     sigma_Z = sqrt(sigma2_Z)
-
+    
     stopifnot( num_pre >= 1 )
-
+    
     if ( !is.null(seed) ) {
         set.seed(seed)
     }
-
+    
     treatment = sample(c(0, 1), size = N, replace = TRUE, prob = c(1-p, p))
     mu_1 = c(mu_theta_1, mu_X_1, mu_Z_1)
     mu_0 = c(mu_theta_0, mu_X_0, mu_Z_0)
     
     sigma_XX <- matrix(c(sig_x^2, a, a, sig_z^2),
-                     2)
+                       2)
     sigma_thetaXZ = matrix(c(sigma_theta^2, sigma_theta*sigma_X*rho[1], sigma_theta*sigma_Z*rho[2],
                              sigma_theta*sigma_X*rho[1], sigma_X^2, a,
                              sigma_theta*sigma_Z*rho[2], a, sigma_Z^2), byrow = TRUE, nrow = 3)
     
     treats = mvrnorm(sum(treatment == 1), mu_1, sigma_thetaXZ)
     controls = mvrnorm(sum(treatment == 0), mu_0, sigma_thetaXZ)
-
+    
     theta = rep(NA, N)
     X = rep(NA, N)
     Z = rep(NA, N)
-
+    
     theta[treatment == 1] = treats[, 1]
     theta[treatment == 0] = controls[, 1]
     X[treatment == 1] = treats[, 2]
     X[treatment == 0] = controls[, 2]
     Z[treatment == 1] = treats[, 3]
     Z[treatment == 0] = controls[, 3]
-
+    
     Y_pre = list()
     Y_post = 5 + beta_theta_1*theta + beta_X_1*X + beta_Z_1*Z + rnorm(N, mean = 0, sd = sigma_post)
     Y_0 = 2 + beta_theta_0*theta + beta_X_0*X + beta_Z_0*Z + rnorm(N, mean = 0, sd = sigma_pre)
     Y_pre = 1 + beta_theta_pre*theta + beta_X_pre*X + beta_Z_pre*Z + rnorm(N, mean = 0, sd = sigma_pre)
-
+    
     df = data.frame(treatment = treatment, theta, X, Z, Y_pre, Y_0, Y_post)
     
     return(df)
@@ -85,6 +87,7 @@ library(MASS)
 
 # I will not use the oracle_bias calculator instead assume specifically T = 2, with (X, Z) covariates
 # and any arbitary correlations within all (X, Z, \theta)
+
 # the following functions manually calculate the bias (note this only works for T = 2)
 # two covariate (X, Z) and one univariate theta that might have different correlation rho (2 dimensional)
 # two time periods that I will break Assumption 1 or not
@@ -92,90 +95,94 @@ library(MASS)
 # input a also characterizes the covariance between X and Z, i.e., cov(X, Z) = a 
 # input: beta_theta_0 is T = 1, beta_theta_pre is T = 0, and beta_theta_1 is T = 2. I'm sorry for this confusing definition. 
 
-bias_match_both_truth = function(rho, beta_theta_0, beta_x_0, beta_theta_1, beta_x_1, beta_z_1, beta_z_0, beta_theta_pre, beta_x_pre, beta_z_pre,
-                                 mu_theta_1, mu_theta_0, mu_x_1, mu_x_0,  mu_z_1, mu_z_0, sig_theta, sig_x, sig_z, sigma_pre, a = 0) {
-  # cov matrix of X
-  sigma_XX <- matrix(c(sig_x^2, a, a, sig_z^2),
-                     2)
-  # cov matrix of theta and X
-  sigma_thetax = matrix(c(sig_theta*sig_x*rho[1], sig_theta*sig_z*rho[2]), nrow = 1)
-  # cov matrix of theta and 2 pre-period outcomes (that are identically distributed under perfect parallel trends)
-
-  sigma_thetay = matrix(c(beta_theta_0*sig_theta^2 + beta_x_0*sig_x*rho[1]*sig_theta + beta_z_0*sig_z*rho[2]*sig_theta, beta_theta_pre*sig_theta^2 + beta_x_pre*sig_x*rho[1]*sig_theta + beta_z_pre*sig_z*rho[2]*sig_theta), nrow = 1)
-  # cov matrix of X and 2 pre-period outcomes
-  sigma_xy = matrix(c(beta_x_0*sig_x^2 + beta_theta_0*rho[1]*sig_theta*sig_x + beta_z_0*a,
-                      beta_x_pre*sig_x^2 + beta_theta_pre*rho[1]*sig_theta*sig_x + beta_z_pre*a,
-                      beta_z_0*sig_z^2 + beta_theta_0*rho[2]*sig_theta*sig_z + beta_x_0*a,
-                      beta_z_pre*sig_z^2 + beta_theta_pre*rho[2]*sig_theta*sig_z + beta_x_pre*a), 2, byrow = TRUE)
-
-  vec_beta_x_0 = matrix(c(beta_x_0, beta_z_0), ncol = 1)
-  vec_beta_x_pre = matrix(c(beta_x_pre, beta_z_pre), ncol = 1)
-  # total variance of Y_pre
-  d = beta_theta_0^2*sig_theta^2 + beta_x_0^2*sig_x^2 + beta_z_0^2*sig_z^2 + 2*beta_theta_0*beta_x_0*rho[1]*sig_theta*sig_x +
-    2*beta_theta_0*beta_z_0*sig_theta*sig_z*rho[2] + 2*beta_z_0*beta_x_0*a + sigma_pre^2
-  d2 = beta_theta_pre^2*sig_theta^2 + beta_x_pre^2*sig_x^2 + beta_z_pre^2*sig_z^2 + 2*beta_theta_pre*beta_x_pre*rho[1]*sig_theta*sig_x +
-    2*beta_theta_pre*beta_z_pre*sig_theta*sig_z*rho[2] + 2*beta_z_pre*beta_x_pre*a + sigma_pre^2
-  d3 = beta_theta_0*beta_theta_pre*sig_theta^2 + beta_x_0*beta_x_pre*sig_x^2 + 
-    beta_z_0*beta_z_pre*sig_z^2 + beta_theta_0*beta_x_pre*rho[1]*sig_theta*sig_x + 
-    beta_theta_pre*beta_x_0*rho[1]*sig_theta*sig_x + beta_x_0*beta_z_pre*a + beta_x_pre*beta_z_pre*a + 
-    beta_theta_0*beta_z_pre*rho[2]*sig_theta*sig_z + 
-    beta_theta_pre*beta_z_0*rho[2]*sig_theta*sig_z 
-  # cov matrix of the 2 pre-period outcomes
-  sigma_yy = matrix(c(d, d3, d3, d2), 2)
-
-  # Defining matrix to use theorem 5.1 bias expression
-  B = cbind(sigma_thetax, sigma_thetay)
-  D = rbind(cbind(sigma_XX, sigma_xy), cbind(t(sigma_xy), sigma_yy))
-
-  b = matrix(c(mu_x_1 - mu_x_0, mu_z_1 - mu_z_0, beta_theta_0*(mu_theta_1 - mu_theta_0) + beta_x_0*(mu_x_1 - mu_x_0) + beta_z_0*(mu_z_1 - mu_z_0), beta_theta_pre*(mu_theta_1 - mu_theta_0) + beta_x_pre*(mu_x_1 - mu_x_0) + beta_z_pre*(mu_z_1 - mu_z_0)  ))
-
-  final_bias = beta_theta_1*((mu_theta_1 - mu_theta_0) - B%*%solve(D)%*%b)
-  
-  
-  ### calculating bias for just matching on X
-  cov_Xtheta = matrix(c(sqrt(sig_theta^2*sig_x^2)*rho[1], sqrt(sig_theta^2*sig_z^2)*rho[2]),
-                      nrow = 1)
-   
-  Delta_theta = beta_theta_1 - mean(c(beta_theta_0, beta_theta_pre))
-  delta_theta = mu_theta_1 - mu_theta_0
-  
-  Delta_X = beta_x_1 - mean(c(beta_x_0, beta_x_pre))
-  delta_X = mu_x_1 - mu_x_0
-  
-  Delta_Z = beta_z_1 - mean(c(beta_z_0, beta_z_pre))
-  delta_Z = mu_z_1 - mu_z_0
-  
-  delta_theta_tilde = delta_theta - cov_Xtheta %*% solve(sigma_XX) %*% t(cbind(delta_X, delta_Z))
-  
-  bias_X = Delta_theta * delta_theta_tilde
-  
-  return(c(final_bias, bias_X))
+bias_match_both_truth = function(rho, beta_theta_0, beta_x_0, beta_theta_1, beta_x_1, beta_z_1, beta_z_0,
+                                 beta_theta_pre, beta_x_pre, beta_z_pre,
+                                 mu_theta_1, mu_theta_0, mu_x_1, mu_x_0,  mu_z_1, mu_z_0, sig_theta,
+                                 sig_x, sig_z, sigma_pre, a = 0) {
+    # cov matrix of X
+    sigma_XX <- matrix(c(sig_x^2, a, a, sig_z^2),
+                       2)
+    # cov matrix of theta and X
+    sigma_thetax = matrix(c(sig_theta*sig_x*rho[1], sig_theta*sig_z*rho[2]), nrow = 1)
+    # cov matrix of theta and 2 pre-period outcomes (that are identically distributed under perfect parallel trends)
+    
+    sigma_thetay = matrix(c(beta_theta_0*sig_theta^2 + beta_x_0*sig_x*rho[1]*sig_theta + beta_z_0*sig_z*rho[2]*sig_theta, beta_theta_pre*sig_theta^2 + beta_x_pre*sig_x*rho[1]*sig_theta + beta_z_pre*sig_z*rho[2]*sig_theta), nrow = 1)
+    # cov matrix of X and 2 pre-period outcomes
+    sigma_xy = matrix(c(beta_x_0*sig_x^2 + beta_theta_0*rho[1]*sig_theta*sig_x + beta_z_0*a,
+                        beta_x_pre*sig_x^2 + beta_theta_pre*rho[1]*sig_theta*sig_x + beta_z_pre*a,
+                        beta_z_0*sig_z^2 + beta_theta_0*rho[2]*sig_theta*sig_z + beta_x_0*a,
+                        beta_z_pre*sig_z^2 + beta_theta_pre*rho[2]*sig_theta*sig_z + beta_x_pre*a), 2, byrow = TRUE)
+    
+    vec_beta_x_0 = matrix(c(beta_x_0, beta_z_0), ncol = 1)
+    vec_beta_x_pre = matrix(c(beta_x_pre, beta_z_pre), ncol = 1)
+    # total variance of Y_pre
+    d = beta_theta_0^2*sig_theta^2 + beta_x_0^2*sig_x^2 + beta_z_0^2*sig_z^2 + 2*beta_theta_0*beta_x_0*rho[1]*sig_theta*sig_x +
+        2*beta_theta_0*beta_z_0*sig_theta*sig_z*rho[2] + 2*beta_z_0*beta_x_0*a + sigma_pre^2
+    d2 = beta_theta_pre^2*sig_theta^2 + beta_x_pre^2*sig_x^2 + beta_z_pre^2*sig_z^2 + 2*beta_theta_pre*beta_x_pre*rho[1]*sig_theta*sig_x +
+        2*beta_theta_pre*beta_z_pre*sig_theta*sig_z*rho[2] + 2*beta_z_pre*beta_x_pre*a + sigma_pre^2
+    d3 = beta_theta_0*beta_theta_pre*sig_theta^2 + beta_x_0*beta_x_pre*sig_x^2 + 
+        beta_z_0*beta_z_pre*sig_z^2 + beta_theta_0*beta_x_pre*rho[1]*sig_theta*sig_x + 
+        beta_theta_pre*beta_x_0*rho[1]*sig_theta*sig_x + beta_x_0*beta_z_pre*a + beta_x_pre*beta_z_pre*a + 
+        beta_theta_0*beta_z_pre*rho[2]*sig_theta*sig_z + 
+        beta_theta_pre*beta_z_0*rho[2]*sig_theta*sig_z 
+    # cov matrix of the 2 pre-period outcomes
+    sigma_yy = matrix(c(d, d3, d3, d2), 2)
+    
+    # Defining matrix to use theorem 5.1 bias expression
+    B = cbind(sigma_thetax, sigma_thetay)
+    D = rbind(cbind(sigma_XX, sigma_xy), cbind(t(sigma_xy), sigma_yy))
+    
+    b = matrix(c(mu_x_1 - mu_x_0, mu_z_1 - mu_z_0, beta_theta_0*(mu_theta_1 - mu_theta_0) + beta_x_0*(mu_x_1 - mu_x_0) + beta_z_0*(mu_z_1 - mu_z_0), beta_theta_pre*(mu_theta_1 - mu_theta_0) + beta_x_pre*(mu_x_1 - mu_x_0) + beta_z_pre*(mu_z_1 - mu_z_0)  ))
+    
+    final_bias = beta_theta_1*((mu_theta_1 - mu_theta_0) - B%*%solve(D)%*%b)
+    
+    
+    ### calculating bias for just matching on X
+    cov_Xtheta = matrix(c(sqrt(sig_theta^2*sig_x^2)*rho[1], sqrt(sig_theta^2*sig_z^2)*rho[2]),
+                        nrow = 1)
+    
+    Delta_theta = beta_theta_1 - mean(c(beta_theta_0, beta_theta_pre))
+    delta_theta = mu_theta_1 - mu_theta_0
+    
+    Delta_X = beta_x_1 - mean(c(beta_x_0, beta_x_pre))
+    delta_X = mu_x_1 - mu_x_0
+    
+    Delta_Z = beta_z_1 - mean(c(beta_z_0, beta_z_pre))
+    delta_Z = mu_z_1 - mu_z_0
+    
+    delta_theta_tilde = delta_theta - cov_Xtheta %*% solve(sigma_XX) %*% t(cbind(delta_X, delta_Z))
+    
+    bias_X = Delta_theta * delta_theta_tilde
+    
+    return(c(final_bias, bias_X))
 }
 
 
 ## Calculates bias based on our estimator
-bias_match_both_myestimator = function(rho, beta_theta_0, beta_x_0, beta_theta_1, beta_x_1, beta_z_1, beta_z_0, beta_theta_pre, beta_x_pre, beta_z_pre,
-                                       mu_theta_1, mu_theta_0, mu_x_1, mu_x_0, mu_z_1, mu_z_0, sig_theta, sig_x, sig_z, sigma_pre, a = 0) {
-  # cov matrix of X
-  sigma_XX <- matrix(c(sig_x^2, a, a, sig_z^2),
-                     2)
-  # cov matrix of theta and X
-  sigma_thetax = matrix(c(sig_theta*sig_x*rho[1], sig_theta*sig_z*rho[2]), nrow = 1)
-
-  # new variance with the correlated
-  vt = sig_theta^2 - sigma_thetax%*%solve(sigma_XX)%*%t(sigma_thetax)
-
-  # reliability
-  reliability = (beta_theta_0^2 + beta_theta_pre^2)*vt/((beta_theta_0^2 + beta_theta_pre^2)*vt + sigma_pre^2)
-
-  # new delta theta
-  dx = matrix(c(mu_x_1 - mu_x_0, mu_z_1 - mu_z_0), nrow = 2)
-  dt = (mu_theta_1 - mu_theta_0) - sigma_thetax%*%solve(sigma_XX)%*%dx
-
-  # bias as reported in Theom 5.2
-  final_bias = beta_theta_1*dt*(1 - reliability)
-
-  return(final_bias)
+bias_match_both_myestimator = function(rho, beta_theta_0, beta_x_0, beta_theta_1, beta_x_1, beta_z_1, beta_z_0,
+                                       beta_theta_pre, beta_x_pre, beta_z_pre,
+                                       mu_theta_1, mu_theta_0, mu_x_1, mu_x_0, mu_z_1, mu_z_0, sig_theta, 
+                                       sig_x, sig_z, sigma_pre, a = 0) {
+    # cov matrix of X
+    sigma_XX <- matrix(c(sig_x^2, a, a, sig_z^2),
+                       2)
+    # cov matrix of theta and X
+    sigma_thetax = matrix(c(sig_theta*sig_x*rho[1], sig_theta*sig_z*rho[2]), nrow = 1)
+    
+    # new variance with the correlated
+    vt = sig_theta^2 - sigma_thetax%*%solve(sigma_XX)%*%t(sigma_thetax)
+    
+    # reliability
+    reliability = (beta_theta_0^2 + beta_theta_pre^2)*vt/((beta_theta_0^2 + beta_theta_pre^2)*vt + sigma_pre^2)
+    
+    # new delta theta
+    dx = matrix(c(mu_x_1 - mu_x_0, mu_z_1 - mu_z_0), nrow = 2)
+    dt = (mu_theta_1 - mu_theta_0) - sigma_thetax%*%solve(sigma_XX)%*%dx
+    
+    # bias as reported in Theom 5.2
+    final_bias = beta_theta_1*dt*(1 - reliability)
+    
+    return(final_bias)
 }
 
 
@@ -195,77 +202,105 @@ rho = c(0.5, 0.3)
 
 a = 0  
 
-truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre,
-                        beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
-                        mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                        mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre, a = a)
-  
-  
-  guess = bias_match_both_myestimator(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, beta_x_1 = beta_x_1,beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre,
+truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, 
+                              beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre,
+                              beta_z_pre = beta_z_pre,
                               beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
                               mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                              mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre)
-  
+                              mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, 
+                              sig_z = sig_z, sigma_pre = sigma_pre, a = a)
+
+
+guess = bias_match_both_myestimator(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, 
+                                    beta_x_1 = beta_x_1,beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre,
+                                    beta_z_pre = beta_z_pre,
+                                    beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
+                                    mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, 
+                                    mu_x_0 = mu_x_0,
+                                    mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, 
+                                    sig_z = sig_z, sigma_pre = sigma_pre)
+
 truth; guess
 
 a = 0.5
 
-truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre,
-                        beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
-                        mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                        mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre, a = a)
-  
-  
-  guess = bias_match_both_myestimator(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, beta_x_1 = beta_x_1,beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre,
+truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, 
+                              beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre,
+                              beta_z_pre = beta_z_pre,
                               beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
                               mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                              mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre)
-  
+                              mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, 
+                              sig_z = sig_z, sigma_pre = sigma_pre, a = a)
+
+
+guess = bias_match_both_myestimator(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, 
+                                    beta_x_1 = beta_x_1,beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre,
+                                    beta_z_pre = beta_z_pre,
+                                    beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
+                                    mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, 
+                                    mu_x_0 = mu_x_0,
+                                    mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, 
+                                    sig_z = sig_z, sigma_pre = sigma_pre)
+
 truth; guess
 ```
 
-### let's check it against your function
+
+### Comparing above function with oracle bias calculator
+
 ```{r}
 source( here::here( "oracle_bias_calculators.R" ) )
 
-
-
 beta_theta_1 = 1.5; beta_theta_0 = 1.0; beta_theta_pre = 0.5
-
 beta_x_1 = 1.3; beta_x_0 = 1.1; beta_x_pre = 0.6
-
-beta_z_1 = 1.0; beta_z_0 = 0.7; beta_z_pre = 0.3
-
-mu_theta_1 = mu_x_1 = mu_z_1 = 1
-mu_theta_0 = mu_x_0 = mu_z_0 = 0
-sig_z = sig_theta = sig_x = sigma_pre = 1
+beta_z_1 = 1.0; beta_z_0 = 0.7; beta_z_pre = -0.3
+mu_theta_1 = mu_x_1 = 1
+mu_z_1 = 2
+mu_theta_0 = mu_x_0
+mu_z_0 = -1
+sig_z = 0.5
+sig_theta = 0.8
+sig_x = 0.7
+sigma_pre = 2.1
 
 rho = c(0.5, 0.3)
 num_pre = 2
-a = 0  
+a = 0.25
 
-truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre,
-                        beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
-                        mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
-                        mu_z_1 = mu_z_1, mu_z_0= mu_z_0, sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre, a = a)
-  
+truth = bias_match_both_truth(rho = rho, 
+                              beta_theta_0 = beta_theta_0, beta_x_0 = beta_x_0, beta_z_0 = beta_z_0,
+                              beta_theta_1 = beta_theta_1, beta_x_1 = beta_x_1, beta_z_1 = beta_z_1,
+                              beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre,
+                              mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, 
+                              mu_x_1 = mu_x_1, mu_x_0 = mu_x_0,
+                              mu_z_1 = mu_z_1, mu_z_0= mu_z_0, 
+                              sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z,
+                              sigma_pre = sigma_pre, a = a)
+
 # redefining parameters to match your inputs    
 bt0 = c(beta_theta_pre, beta_theta_0)
 bx0 = cbind(c(beta_x_pre, beta_x_0), c(beta_z_pre, beta_z_0))
 mX1 = c(mu_x_1, mu_z_1)
 mX0 = c(mu_x_0, mu_z_0)
-Sigma_theta = 1
-Sigma_X = matrix( c(1,a,a,1), nrow=2 )
-cov_Xtheta = rho
+Sigma_theta = sig_theta^2
+Sigma_X = matrix( c(sig_x^2,a,a,sig_z^2), nrow=2 )
+cov_Xtheta = rho * c( sig_x, sig_z )
 sigma2_e = sigma_pre^2
 
 
-truth2 = calculate_truth_general(beta_theta_1, beta_theta_0 = bt0,
-                        beta_X_1 = beta_x_1, beta_X_0 = bx0, mu_theta_1, mu_theta_0,
-                        mu_X_1 = mX1, mu_X_0 = mX0, Sigma_theta, Sigma_X, cov_Xtheta, sigma2_e, num_pre = num_pre)
+truth2 = calculate_truth_general(beta_theta_1 = beta_theta_1, beta_theta_0 = bt0,
+                                 beta_X_1 = beta_x_1, beta_X_0 = bx0, 
+                                 mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                                 mu_X_1 = mX1, mu_X_0 = mX0, 
+                                 Sigma_theta = Sigma_theta, Sigma_X = Sigma_X, cov_Xtheta = cov_Xtheta, 
+                                 sigma2_e = sigma2_e,
+                                 num_pre = num_pre)
 
-## aligned!!
-truth; truth2
+## aligned?
+truth
+truth2
+
+truth - rev( truth2$bias[3:4] )
 
 ```
 
@@ -273,8 +308,11 @@ truth; truth2
 
 ## getting theoretical truths
 ```{r}
+
 #### Actual simulation
-K = 1000
+
+# Number of simulation replicates per scenario
+K = 10 #1000
 
 # boundary
 #sigma_pre = 1.347 (the exact decision boundary point)
@@ -298,25 +336,69 @@ a = 0.3
 ### let's first calculate the theoretical biases under these scenarios
 ### using our formula in the paper ### (green line in Figure 3)
 bias_matchX = bias_matchboth = true_diffs = vector()
+
 for (j in 1:length(sigma_pre_tests)) {
     
-  sigma_pre = sigma_pre_tests[j]
-  
-  truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0, beta_theta_1, beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre, beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre, beta_z_1 = beta_z_1, beta_z_0 = beta_z_0,
-  mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, 
-  mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, mu_z_1 = mu_z_1, mu_z_0= mu_z_0, 
-  sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre, 
-  a = a)
-
-  bias_matchX[j] = truth[2]
-  bias_matchboth[j] = truth[1]
-   
+    sigma_pre = sigma_pre_tests[j]
+    
+    truth = bias_match_both_truth(rho = rho, beta_theta_0 = beta_theta_0, beta_x_0,
+                                  beta_theta_1, beta_x_1 = beta_x_1, beta_theta_pre = beta_theta_pre,
+                                  beta_x_pre = beta_x_pre, beta_z_pre = beta_z_pre, beta_z_1 = beta_z_1,
+                                  beta_z_0 = beta_z_0,
+                                  mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0, 
+                                  mu_x_1 = mu_x_1, mu_x_0 = mu_x_0, mu_z_1 = mu_z_1, mu_z_0= mu_z_0, 
+                                  sig_theta = sig_theta, sig_x = sig_x, sig_z = sig_z, sigma_pre = sigma_pre, 
+                                  a = a)
+    
+    bias_matchX[j] = truth[2]
+    bias_matchboth[j] = truth[1]
+    
 }
 
 diff = abs(bias_matchX) - abs(bias_matchboth)
 
 diff
 ```
+
+Compulsive check against oracle
+
+```{r}
+    source( here::here( "oracle_bias_calculators.R" ) )
+
+    # redefining parameters to match inputs    
+    bt0 = c(beta_theta_pre, beta_theta_0)
+    bx0 = cbind(c(beta_x_pre, beta_x_0), c(beta_z_pre, beta_z_0))
+    mX1 = c(mu_x_1, mu_z_1)
+    mX0 = c(mu_x_0, mu_z_0)
+    Sigma_theta = sig_theta^2
+    Sigma_X = matrix( c(sig_x^2,a,a,sig_z^2), nrow=2 )
+    cov_Xtheta = rho * c( sig_x, sig_z )
+    
+    ct <- calculate_truth_general( beta_theta_0 = bt0,
+                      beta_X_0 = bx0,
+                      beta_theta_1 = beta_theta_1, 
+                      beta_X_1 = c( beta_x_1, beta_z_1 ),
+                      mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                      mu_X_1 = mX1, mu_X_0 = mX0,
+                      Sigma_theta = Sigma_theta, 
+                      cov_Xtheta = cov_Xtheta,
+                      Sigma_X = Sigma_X, sigma2_e = sigma_pre_tests[[1]]^2, num_pre = 2 )
+    ct$bias[3:4] - c( bias_matchX[[1]], bias_matchboth[[1]] )
+    
+    # truth_o = map_df( sigma_pre_tests, calculate_truth_general,
+    #                   beta_theta_0 = c( beta_theta_pre, beta_theta_0 ), 
+    #                   beta_X_0 = bx,
+    #                   beta_theta_1 = beta_theta_1, 
+    #                   beta_X_1 = c( beta_x_1, beta_z_1 ),
+    #                   mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+    #                   mu_X_1 = c( mu_x_1, mu_z_1 ), mu_X_0 = c( mu_x_0, mu_z_0 ),
+    #                   Sigma_theta = sig_theta, 
+    #                   Sigma_X = Sigma_x )
+
+
+
+```
+
 
 # empirically simulating data and running our guideline
 
@@ -339,7 +421,7 @@ for (j in 1:length(sigma_pre_tests)) {
                        mu_Z_1 = mu_z_1, mu_Z_0 = mu_z_0,
                        sigma2_theta = sig_theta^2, sigma2_X = sig_x^2, sigma2_Z = sig_z^2,
                        sigma2_pre = sigma_pre^2, num_pre = 2, rho = rho, a = a, seed = i)
-                
+        
         Y_pre = colnames(df)[5:6]
         Y_post =  colnames(df)[ncol(df)]
         treatment = "treatment"

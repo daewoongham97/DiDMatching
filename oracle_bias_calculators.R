@@ -485,5 +485,35 @@ if ( FALSE ) {
                              sigma2_e = sigma_pre / 5,
                              num_pre = 2 )
 
+
+
+    # Three time periods check, 2 covariates.
+    num_pre = 3
+
+    beta_theta_1 = 1
+    beta_theta_0 = seq( 0, 0.5, length.out = num_pre )
+
+    beta_X_1 = c( 0.5, 0.8 )
+    beta_X_0 = matrix( rep(  c( 0.4, 0.2 ), num_pre ), nrow=num_pre, byrow = TRUE )
+
+    mu_X_0 = c( 0, 1 )
+    mu_X_1 = c( 1, 0 )
+
+    mu_theta_1 = -1
+    mu_theta_0 = -0.5
+
+    Sigma_theta = 2
+    Sigma_X = matrix( c(1,0.5,0.5,1), nrow=2 )
+    cov_Xtheta = c( 0, 0 )
+
+    sigma2_e = 0.3
+
+    calculate_truth_general( beta_theta_1 = beta_theta_1, beta_theta_0 = beta_theta_0,
+                             beta_X_1 = beta_X_1, beta_X_0 = beta_X_0,
+                             mu_theta_1 = mu_theta_1, mu_theta_0 = mu_theta_0,
+                             mu_X_1 = mu_X_1, mu_X_0 = mu_X_0,
+                             Sigma_theta = Sigma_theta, Sigma_X = Sigma_X, cov_Xtheta = cov_Xtheta,
+                             sigma2_e = sigma2_e,
+                             num_pre = 3 )
 }
 
