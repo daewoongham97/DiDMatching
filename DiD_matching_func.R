@@ -235,6 +235,7 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
     est_Delta_theta = params$est_beta_theta_post - params$est_beta_theta_pre
     s_ratio = params$est_beta_theta_pre/params$est_beta_theta_post
     rT_theta = params$rT_theta
+    est_sigma2 = params$sigma2_e
 
 
     # checking condition in Guideline (result for second row second
@@ -286,7 +287,8 @@ DiD_matching_guideline = function(Y_pre, Y_post, treatment, X = NULL, data,
 
     out = list(result = result_df,
                statistic = estimate_df,
-               delta = deltas )
+               delta = deltas,
+               est_sigma2 =  est_sigma2)
 
     return(out)
 }
