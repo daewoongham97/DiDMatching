@@ -284,7 +284,9 @@ mX1 = c(mu_x_1, mu_z_1)
 mX0 = c(mu_x_0, mu_z_0)
 Sigma_theta = sig_theta^2
 Sigma_X = matrix( c(sig_x^2,a,a,sig_z^2), nrow=2 )
-cov_Xtheta = rho * c( sig_x, sig_z )
+#cov_Xtheta = rho * c( sig_x, sig_z )
+cov_Xtheta = c(sig_theta*sig_x*rho[1], sig_theta*sig_z*rho[2])
+
 sigma2_e = sigma_pre^2
 
 
