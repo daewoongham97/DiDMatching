@@ -41,13 +41,13 @@ Our initial simulation has varying coefficients for both $X$ and $Z$, along with
 
 ```{r}
 # Number of simulation replicates per scenario
-K = 25 #1000
+K = 2 # 25 #1000
 
 cor_Xtheta = c( 0.3, 0.6 )
 
 sigma_pre_tests = seq( 0.3, 1.5, by=0.10 ) 
-
 names(sigma_pre_tests) = sigma_pre_tests 
+
 sim_res_main <- map_df( sigma_pre_tests, 
                    ~ run_scenario( sigma_pre = .,
                                    beta_theta_0 = c( 0.5, 1.0 ),
@@ -62,7 +62,7 @@ sim_res_main <- map_df( sigma_pre_tests,
                    .id = "sigma_pre" ) %>%
     mutate( sigma_pre = as.numeric(sigma_pre) )
 
-saveRDS(sim_res_main, file = "results/plot_df.rds")
+saveRDS(sim_res_main, file = "results/main_results.rds")
 ```
 
 Our table shows, for different residual variation, the proportion of the trials that say "match!", the average estimated reduction in bias, the standard deviation of the estimates across simulation (which is the true SE), and whether the oracle says to match and how much bias would be reduced.  The last column is the $R^2$ for a regression of outcome onto the two observed covariates to get a sense of how much variation is explained by what we can match on.
@@ -159,7 +159,7 @@ Here we have X and Z correlated, but theta is parallel.
 
 ```{r}
 
-sim_res_theta_par <- map_df( sigma_pre_tests, 
+sim_res3 <- map_df( sigma_pre_tests, 
                     ~ run_scenario( sigma_pre = .,
                                     K = K,
                                     beta_theta_0 = c( 0.75, 0.75 ),
@@ -180,7 +180,6 @@ sim_res_theta_par = readRDS("results/sim_res_theta_par.rds" )
 sim_res_theta_par %>% 
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
-
 
 plt <- make_result_plot( sim_res_theta_par )
 plt
@@ -266,7 +265,6 @@ sim_res_T4 %>%
 plt <- make_result_plot( sim_res_T4 )
 plt
 ```
-
 
 
 
@@ -380,3 +378,4 @@ ggplot( all_res, aes( sigma_pre, per_match ) ) +
     geom_hline( yintercept = 0 )
 
 ```
+
