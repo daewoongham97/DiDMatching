@@ -117,6 +117,15 @@ calculate_truth_general <- function( beta_theta_1, beta_theta_0,
 
     tb$match = tb$bias_reduction > 0
 
+    attr( tb, "parts" ) <- list( A = A, B = mat, C = C,
+                                 Delta_theta = Delta_theta,
+                                 cov_Xtheta = cov_Xtheta,
+                                 sigma_XX = Sigma_X,
+                                 sigma_YY = sigma_YY,
+                                 sigma_thetaY = sigma_thetaY,
+                                 sigma_thetaX = sigma_thetaX,
+                                 delta_theta_tilde = delta_theta_tilde )
+
     tb
 }
 
