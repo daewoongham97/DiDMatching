@@ -458,15 +458,19 @@ run_scenario <- function( N = 20000,
                                  cor_XZ = cor_XZ ) )
 
     rsp <- summarise( res,
-                      per_match = mean(match),
-                      a_tau_xy = mean(tau_xy),
-                      SE_tau_xy = sd(tau_xy),
-                      a_est_beta0 = mean(est_beta0),
-                      a_est_beta1 = mean(est_beta1),
-                      a_est_delta_theta = mean(est_delta_theta),
-                      a_est_sig_pre_sq = mean(est_sig_pre_sq),
+                      per_match = mean(match, na.rm = TRUE),
+                      a_tau_xy = mean(tau_xy, na.rm = TRUE),
+                      SE_tau_xy = sd(tau_xy, na.rm = TRUE),
+                      prop_na = mean( is.na( tau_xy ) ),
+                      a_est_beta0 = mean(est_beta0, na.rm = TRUE),
+                      a_est_beta1 = mean(est_beta1,na.rm = TRUE),
+                      a_est_delta_theta = mean(est_delta_theta,na.rm = TRUE),
+                      a_est_sig_pre_sq = mean(est_sig_pre_sq,na.rm = TRUE),
                       R2 = mean( R2))
 
+   # if ( is.na( rsp$a_tau_xy ) ) {
+   #        browser()
+   # }
 
     rsp = cbind( rsp, truth_o )
 
