@@ -63,7 +63,7 @@ factors <- expand_grid( beta_theta_1 = 0.8,
                         N = 5000, #c( 2000, 20000 ),
                         num_pre = 4, # c( 2, 4 ),
                         bt0 = c( "parallel", "varying", "narrow" ),
-                        bxz0 = "varying", #c( "varying", "parallel" ),
+                        bxz0 = c( "varying", "parallel" ),
                         corr = c( "all", "none", "theta", "XZ" ),
                         sigma_pre = sigma_pre_tests )
 
@@ -94,27 +94,32 @@ res = factors %>%
 scens = nrow(factors) / length( sigma_pre_tests )
 res$ID = rep( 1:scens, each=length(sigma_pre_tests) )
 res <- relocate( res, ID )
+res = bind_cols( res, factors )
+
 saveRDS( res, file=here::here( "replication/results/full_multifactor_result_set.rds" ) )
 
+
+#### Looking at simulation results ####
+
+res = readRDS(here::here( "replication/results/full_multifactor_result_set.rds" ) )
 head( res )
 
-res = bind_cols( res, factors )
 
 
 # Check for failed sim scenarios
 if ( FALSE ) {
     ff <- filter( res, is.na( a_tau_xy ) )
-table( ff$N )
-table( ff$bt0, ff$bxz0 )
-table( bt0=ff$bt0, corr=ff$corr, ff$N )
-mean( is.na( res$a_tau_xy ) )
-sum( is.na(res) )
-sum( is.na( res$a_tau_xy ))
-sum( is.na( res$per_match ))
+    table( ff$N )
+    table( ff$bt0, ff$bxz0 )
+    table( bt0=ff$bt0, corr=ff$corr, ff$N )
+    mean( is.na( res$a_tau_xy ) )
+    sum( is.na(res) )
+    sum( is.na( res$a_tau_xy ))
+    sum( is.na( res$per_match ))
 }
 
 res <- mutate( res,
-               delta =  reduce_XY - a_tau_xy,
+               delta =  a_tau_xy - reduce_XY,
                dec = ifelse( abs( per_match - match_XY ) < 0.5, "right", "wrong" ) )
 
 ggplot( res, aes( sigma_pre, delta, group=ID, col = bxz0 ) ) +
@@ -136,10 +141,48 @@ ggplot( res, aes( sigma_pre, delta, group=ID ) ) +
     geom_line()
 
 sum( is.na( res$reduce_XY ) )
+
+
+res$bt0 = factor( res$bt0, levels = c("parallel", "narrow", "varying" ) )
+res$corr = factor( res$corr, levels = c("all", "theta", "XZ", "none" ) )
+
+# Main figure for paper
 ggplot( res, aes( sigma_pre, reduce_XY, group=ID, col=dec, pch=dec ) ) +
-    facet_grid( corr ~ bt0, labeller = label_both ) +
+    facet_grid( bt0 ~ corr, labeller = label_both ) +
     geom_hline( yintercept = 0, col="grey" ) +
-    geom_point()
+    geom_point() +
+    theme( legend.position="bottom",
+           legend.direction="horizontal", legend.key.width=unit(1,"cm"),
+           panel.border = element_blank() ) +
+    labs( color = "Match recommendation", pch="Match recommendation",
+          y = "True bias reduction" )
+
+ggsave( filename = "multifactorA.pdf", width = 6, height = 4 )
+
+
+
+
+# Second figure for paper
+ggplot( res, aes( sigma_pre, delta, group=ID ) ) +
+    facet_grid( bt0 ~ corr, labeller = label_both ) +
+    geom_hline( yintercept = 0, col="grey" ) +
+    geom_line() +
+    labs( y = "Bias in guideline bias estimate" )
+ggsave( filename = "multifactorB.pdf", width = 6, height = 3.5 )
+
+
+
+
+# This shows how we estimate sigma2_pre well (or not) depending on
+# assumptions
+head(res)
+res <- mutate( res,
+               sigma_ratio = a_est_sig_pre_sq / sigma_pre^2 )
+ggplot( res, aes( sigma_pre, sigma_ratio, group=ID ) ) +
+    facet_grid( bt0 ~ corr, labeller = label_both ) +
+    geom_hline( yintercept = 1, col="grey" ) +
+    geom_line() +
+    labs( y = "Bias in guideline bias estimate" )
 
 cat( "Script complete\n" )
 

@@ -5,7 +5,7 @@ library(ggplot2); library(latex2exp); library(gridExtra); library(ggpubr)
 theme_set( theme_minimal() )
 knitr::opts_chunk$set(fig.width = 6,
                       fig.height = 3,
-                      out.width = "80%", 
+                      out.width = "80%",
                       fig.align = "center",
                       warning = FALSE )
 options(list(dplyr.summarise.inform = FALSE))
@@ -16,18 +16,19 @@ source( here::here( "replication/sim_functions.R" ) )
 source( here::here( "oracle_bias_calculators.R" ) )
 source( here::here( "DiD_matching_func.R" ) )
 
+setwd( here::here( "replication/" ) )
 
 
 ## -----------------------------------------------------------------------
 # Number of simulation replicates per scenario
-K = 2 # 25 #1000
+K = 25 # 25 #1000
 
 cor_Xtheta = c( 0.3, 0.6 )
 
-sigma_pre_tests = seq( 0.3, 1.5, by=0.10 ) 
-names(sigma_pre_tests) = sigma_pre_tests 
+sigma_pre_tests = seq( 0.3, 1.5, by=0.10 )
+names(sigma_pre_tests) = sigma_pre_tests
 
-sim_res_main <- map_df( sigma_pre_tests, 
+sim_res_main <- map_df( sigma_pre_tests,
                    ~ run_scenario( sigma_pre = .,
                                    beta_theta_0 = c( 0.5, 1.0 ),
                                    beta_theta_1 = 1.5,
@@ -45,7 +46,7 @@ saveRDS(sim_res_main, file = "results/main_results.rds")
 
 
 ## ---- echo=FALSE--------------------------------------------------------
-sim_res_main %>% 
+sim_res_main %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -56,7 +57,7 @@ plt
 
 
 ## -----------------------------------------------------------------------
-sim_res_indep <- map_df( sigma_pre_tests, 
+sim_res_indep <- map_df( sigma_pre_tests,
                     ~ run_scenario( sigma_pre = .,
                                     beta_theta_0 = c( 0.5, 1.0 ),
                                     beta_theta_1 = 1.5,
@@ -74,7 +75,7 @@ sim_res_indep <- map_df( sigma_pre_tests,
 ## ---- echo=FALSE--------------------------------------------------------
 saveRDS(sim_res_indep, file = "results/sim_res_indep.rds")
 
-sim_res_indep %>% 
+sim_res_indep %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -83,7 +84,7 @@ plt
 
 
 ## -----------------------------------------------------------------------
-sim_res_correct <- map_df( sigma_pre_tests, 
+sim_res_correct <- map_df( sigma_pre_tests,
                     ~ run_scenario( sigma_pre = .,
                                     K = K,
                                     beta_theta_0 = c( 0.75, 0.75 ),
@@ -101,7 +102,7 @@ sim_res_correct <- map_df( sigma_pre_tests,
 saveRDS(sim_res_correct, file = "results/sim_res_correct.rds")
 sim_res_correct = readRDS( "results/sim_res_correct.rds" )
 
-sim_res_correct %>% 
+sim_res_correct %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -111,7 +112,7 @@ plt
 
 ## -----------------------------------------------------------------------
 
-sim_res3 <- map_df( sigma_pre_tests, 
+sim_res_theta_par <- map_df( sigma_pre_tests,
                     ~ run_scenario( sigma_pre = .,
                                     K = K,
                                     beta_theta_0 = c( 0.75, 0.75 ),
@@ -129,7 +130,7 @@ sim_res3 <- map_df( sigma_pre_tests,
 ## ---- echo=FALSE--------------------------------------------------------
 saveRDS(sim_res_theta_par, file = "results/sim_res_theta_par.rds")
 sim_res_theta_par = readRDS("results/sim_res_theta_par.rds" )
-sim_res_theta_par %>% 
+sim_res_theta_par %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -139,7 +140,7 @@ plt
 
 ## -----------------------------------------------------------------------
 
-sim_resSS <- map_df( sigma_pre_tests, 
+sim_resSS <- map_df( sigma_pre_tests,
                     ~ run_scenario( sigma_pre = .,
                                     beta_theta_0 = c( 0.5, 1.0 ),
                                     beta_theta_1 = 1.5,
@@ -157,7 +158,7 @@ sim_resSS <- map_df( sigma_pre_tests,
 ## ---- echo=FALSE--------------------------------------------------------
 saveRDS(sim_resSS, file = "results/sim_resSS.rds" )
 sim_resSS = readRDS( "results/sim_resSS.rds" )
-sim_resSS %>% 
+sim_resSS %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -173,7 +174,7 @@ sim_resSS$SE_tau_xy / sim_res_main$SE_tau_xy
 
 sigmas_larger = sigma_pre_tests * 2
 names(sigmas_larger) = sigmas_larger
-sim_res_T4 <- map_df( sigmas_larger, 
+sim_res_T4 <- map_df( sigmas_larger,
                     ~ run_scenario( sigma_pre = .,
                                     beta_theta_0 = c( 0.0, 0.4, 0.8, 1.2 ),
                                     beta_theta_1 = 1.6,
@@ -191,7 +192,7 @@ sim_res_T4 <- map_df( sigmas_larger,
 ## ---- echo=FALSE--------------------------------------------------------
 saveRDS(sim_res_T4, file = "results/sim_res_T4.rds")
 
-sim_res_T4 %>% 
+sim_res_T4 %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -202,7 +203,7 @@ plt
 
 ## -----------------------------------------------------------------------
 
-sim_res_T4_narrow <- map_df( sigmas_larger, 
+sim_res_T4_narrow <- map_df( sigmas_larger,
                     ~ run_scenario( sigma_pre = .,
                                     beta_theta_0 = c( 0.0, 0.4, 1.0, 1.0 ),
                                     beta_theta_1 = 1.6,
@@ -220,7 +221,7 @@ sim_res_T4_narrow <- map_df( sigmas_larger,
 ## ---- echo=FALSE--------------------------------------------------------
 saveRDS(sim_res_T4_narrow, file = "results/sim_res_T4_narrow.rds")
 
-sim_res_T4_narrow %>% 
+sim_res_T4_narrow %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -230,7 +231,7 @@ plt
 
 ## -----------------------------------------------------------------------
 
-sim_res_T4_indep <- map_df( sigmas_larger, 
+sim_res_T4_indep <- map_df( sigmas_larger,
                     ~ run_scenario( sigma_pre = .,
                                     beta_theta_0 = c( 0.0, 0.4, 1.0, 1.0 ),
                                     beta_theta_1 = 1.6,
@@ -249,7 +250,7 @@ sim_res_T4_indep <- map_df( sigmas_larger,
 saveRDS(sim_res_T4_indep, file = "results/sim_res_T4_indep.rds")
 sim_res_T4_indep = readRDS( "results/sim_res_T4_indep.rds" )
 
-sim_res_T4_indep %>% 
+sim_res_T4_indep %>%
     dplyr::select( sigma_pre, per_match, a_tau_xy, SE_tau_xy, match_XY, reduce_XY, R2 ) %>%
     knitr::kable( digits = 3 )
 
@@ -259,37 +260,37 @@ plt
 
 ## ---- echo=FALSE--------------------------------------------------------
 
-sim_res_main = mutate( sim_res_main, 
+sim_res_main = mutate( sim_res_main,
                        nT = 2,
                        cor = "yes",
                        two_theta = "no" )
-sim_res_indep = mutate( sim_res_indep, 
+sim_res_indep = mutate( sim_res_indep,
                        nT = 2,
                        cor = "no",
                        two_theta = "no"  )
-sim_res_correct = mutate( sim_res_correct, 
+sim_res_correct = mutate( sim_res_correct,
                        nT = 2,
                        cor = "yes",
                        two_theta = "yes"  )
-sim_res_theta_par = mutate( sim_res_theta_par, 
+sim_res_theta_par = mutate( sim_res_theta_par,
                        nT = 2,
                        cor = "yes",
                        two_theta = "yes"  )
-sim_resSS = mutate( sim_resSS, 
+sim_resSS = mutate( sim_resSS,
                        nT = 2,
                        cor = "yes",
                        two_theta = "no"  )
 
 
-sim_res_T4 = mutate( sim_res_T4, 
+sim_res_T4 = mutate( sim_res_T4,
                        nT = 4,
                        cor = "yes",
                        two_theta = "no"  )
-sim_res_T4_indep = mutate( sim_res_T4_indep, 
+sim_res_T4_indep = mutate( sim_res_T4_indep,
                        nT = 4,
                        cor = "no",
                        two_theta = "no"  )
-sim_res_T4_narrow = mutate( sim_res_T4_narrow, 
+sim_res_T4_narrow = mutate( sim_res_T4_narrow,
                        nT = 4,
                        cor = "yes",
                        two_theta = "yes"  )
@@ -305,7 +306,7 @@ all_res = bind_rows( main = sim_res_main,
 
 saveRDS( all_res, file="results/full_result_set.rds" )
 
-arL <- all_res %>% 
+arL <- all_res %>%
     pivot_longer( cols = c(a_tau_xy, reduce_XY ),
                   names_to = "metric", values_to = "value" )
 ggplot( arL, aes( sigma_pre, value, col=scenario ) ) +
@@ -332,12 +333,12 @@ ggplot( all_res, aes( sigma_pre, per_match ) ) +
 
 ## ---- echo=FALSE--------------------------------------------------------
 
-all_res <- mutate( all_res, 
+all_res <- mutate( all_res,
                    incr = reduce_XY - a_tau_xy )
 
 ggplot( all_res, aes( sigma_pre, incr, col=scenario ) ) +
     facet_grid( two_theta ~ nT ) +
-    geom_line() + 
+    geom_line() +
     geom_hline( yintercept = 0 )
 
 
@@ -358,5 +359,5 @@ all_res <- mutate( all_res,
                    ratio = Eest_sig_pre / sigma_pre )
 ggplot( all_res, aes( sigma_pre, ratio, col=scenario ) ) +
     facet_grid( two_theta ~ nT ) +
-    geom_line() 
+    geom_line()
 
